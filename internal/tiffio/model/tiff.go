@@ -2,8 +2,12 @@ package model
 
 import "fmt"
 
+type TIFF struct {
+	IFDs []IFD
+}
+
 type IFD struct {
-	Tags    []Tag
+	Tags    map[TagID]Tag
 	NextIFD int64
 }
 
@@ -11,7 +15,9 @@ func (d IFD) String() string {
 	return fmt.Sprintf("%v", d.Tags)
 }
 
-type Tag interface{}
+type Tag interface {
+	GetTagID() TagID
+}
 
 type TagType interface {
 	byte | string | uint16 | uint32 | Rational | int8 | int16 | int32 | SignedRational | float32 | float64
@@ -20,6 +26,10 @@ type TagType interface {
 type DataTag[T TagType] struct {
 	TagID  uint16
 	Values []T
+}
+
+func (t DataTag[T]) GetTagID() TagID {
+	return TagID(t.TagID)
 }
 
 func (t DataTag[T]) String() string {

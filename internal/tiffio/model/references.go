@@ -1,5 +1,7 @@
 package model
 
+type TagID uint16
+
 // TIFF Tag identifiers with descriptions in English
 const (
 	NewSubfileType            uint16 = 254   // General indication of the kind of data in the subfile
@@ -161,7 +163,7 @@ var TagsIDsLabels = map[uint16]string{
 	289:   "FreeByteCounts",
 	290:   "GrayResponseUnit",
 	291:   "GrayResponseCurve",
-	296:   "esolutionUnit",
+	296:   "ResolutionUnit",
 	297:   "PageNumber",
 	300:   "ColorResponseCurves",
 	305:   "Software",

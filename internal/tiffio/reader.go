@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"strings"
 )
@@ -16,6 +17,7 @@ var BigEndianSignature = [2]byte{0x4d, 0x4d}
 var TiffVersion = [2]byte{0x2a, 0x00}
 
 type Reader struct {
+	name      string
 	byteOrder binary.ByteOrder
 	binary    BinaryReader
 }
@@ -27,11 +29,15 @@ func NewReader(binary BinaryReader) *Reader {
 }
 
 func (r *Reader) Open(name string) error {
+	r.name = name
 	return r.binary.open(name)
 }
 
-func (r *Reader) Close() error {
-	return r.binary.close()
+func (r *Reader) Close() {
+	err := r.binary.close()
+	if err != nil {
+		log.Fatalf("unable to close %s", r.name)
+	}
 }
 
 func (r *Reader) ReadHeader() (int64, error) {
@@ -71,13 +77,13 @@ func (r *Reader) ReadIFD(offset int64) (model.IFD, error) {
 	offset += 2
 
 	// read tags
-	tags := make([]model.Tag, nbTags)
-	for i := range nbTags {
+	tags := make(map[model.TagID]model.Tag, nbTags)
+	for range nbTags {
 		tag, err := r.ReadTag(offset)
 		if err != nil {
 			return model.IFD{}, fmt.Errorf("ReadIFD: cannot read TAG: %w", err)
 		}
-		tags[i] = tag
+		tags[tag.GetTagID()] = tag
 		offset += 12
 	}
 
@@ -444,4 +450,21 @@ func (r *Reader) bytesToFloat32(data []byte) float32 {
 
 func (r *Reader) bytesToFloat64(data []byte) float64 {
 	return float64(r.byteOrder.Uint64(data))
+}
+
+func (r *Reader) GetTile(img model.TIFF, level, tile int) ([]byte, error) {
+	tileOffset := int64(img.IFDs[level].Tags[model.TagID(model.TileOffsets)].(model.DataTag[uint32]).Values[tile])
+	tileBytesCount := img.IFDs[level].Tags[model.TagID(model.TileByteCounts)].(model.DataTag[uint32]).Values[tile]
+
+	data, err := r.readBytesAt(tileOffset, tileBytesCount)
+	if err != nil {
+		return nil, fmt.Errorf("GetTile: cannot read tile at level %d, tile %d: %w", level, tile, err)
+	}
+
+	return data, nil
+}
+
+func (r *Reader) GetJPEGTables(img model.TIFF, level int) []byte {
+	data := img.IFDs[level].Tags[model.TagID(model.JPEGTables)].(model.DataTag[byte]).Values
+	return data
 }
