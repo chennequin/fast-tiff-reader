@@ -4,10 +4,11 @@ import (
 	"TiffReader/internal/jpegio"
 	"TiffReader/internal/tiffio"
 	"TiffReader/internal/tiffio/model"
+	"TiffReader/internal/tiffio/tags"
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"log"
 	"log/slog"
@@ -27,7 +28,7 @@ func main() {
 	name := "assets/CMU-1.tiff"
 
 	binaryReader := tiffio.NewFileBinaryReader()
-	tiffReader := tiffio.NewReader(binaryReader)
+	tiffReader := tiffio.NewTiffReader(binaryReader)
 
 	err := tiffReader.Open(name)
 	if err != nil {
@@ -57,50 +58,74 @@ func main() {
 
 	//lastIFD := tiffImg.IFDs[len(tiffImg.IFDs)-1]
 
-	output := "tile_7_0.jpeg"
+	level := 7
+	tileNum := 1
+	output := fmt.Sprintf("tile_%d_%d.jpeg", level, tileNum)
 
-	tile, err := tiffReader.GetTile(tiffImg, 7, 0)
+	tile, err := tiffReader.GetTile(tiffImg, level, tileNum)
 	if err != nil {
 		log.Fatalf("unable to read image: %s", err)
 	}
 
-	QuantizationTable := tile[2 : 4+tile[5]]
-	Left := tile[4+tile[5] : 4+4+tile[5]+tile[5]]
+	imageWidth := int(tiffImg.Level(level).Tag(tags.ImageWidth).AsUint16s()[0])
+	imageLength := int(tiffImg.Level(level).Tag(tags.ImageLength).AsUint16s()[0])
+	tileWidth := int(tiffImg.Level(level).Tag(tags.TileWidth).AsUint16s()[0])
+	tileLength := int(tiffImg.Level(level).Tag(tags.TileLength).AsUint16s()[0])
 
-	JPEGTables := tiffReader.GetJPEGTables(tiffImg, 7)
+	numTilesHorizontal := imageWidth / tileWidth
+	numTilesVertical := imageLength / tileLength
+	lastTileWidth := imageWidth % tileWidth
+	lastTileLength := imageLength % tileLength
 
-	slog.Info("read", "bytes", hex.EncodeToString(QuantizationTable))
-	slog.Info("read", "bytes", hex.EncodeToString(Left))
-	slog.Info("read", "bytes", hex.EncodeToString(JPEGTables))
-
-	jpegReader := jpegio.NewReader()
-	jTables, err := jpegReader.Parse(JPEGTables)
-	if err != nil {
-		log.Fatalf("unable to parse JPEG: %s", err)
+	if lastTileWidth > 0 {
+		numTilesHorizontal += 1
 	}
-	jTile, err := jpegReader.Parse(tile)
-	if err != nil {
-		log.Fatalf("unable to parse JPEG: %s", err)
+	if lastTileLength > 0 {
+		numTilesVertical += 1
 	}
 
-	j, err := jpegio.MergeJPEGTables(jTile, jTables)
-	if err != nil {
-		log.Fatalf("unable to merge JPEG: %s", err)
+	tilePosX := tileNum % numTilesHorizontal
+	tilePosY := tileNum / numTilesVertical
+
+	width := tileWidth
+	length := tileLength
+
+	_ = numTilesHorizontal
+	_ = numTilesVertical
+	_ = lastTileWidth
+	_ = lastTileLength
+	_ = tilePosX
+	_ = tilePosY
+	_ = width
+	_ = length
+
+	if tilePosX == numTilesHorizontal-1 {
+		width = lastTileWidth
 	}
 
-	data := jpegio.EncodeJPEG(j)
+	if tilePosY == numTilesVertical-1 {
+		length = lastTileLength
+	}
 
-	err = os.WriteFile(output, data, os.ModePerm)
+	jpegTables := tiffImg.Level(level).Tag(tags.JPEGTables)
+	encoded, err := jpegio.MergeSegments(tile, jpegTables.AsBytes())
+
+	err = os.WriteFile(output, encoded, os.ModePerm)
 	if err != nil {
 		fmt.Println("Error writing file:", err)
 		return
 	}
 
-	img, err := jpeg.Decode(bytes.NewReader(data))
+	img, err := jpeg.Decode(bytes.NewReader(encoded))
 	if err != nil {
 		fmt.Println("Erreur de décompression de l'image:", err)
 		return
 	}
+
+	cropRect := image.Rect(0, 0, width, length)
+	croppedImg := img.(interface {
+		SubImage(r image.Rectangle) image.Image
+	}).SubImage(cropRect)
 
 	outFile, err := os.Create(fmt.Sprintf("clone_%s", output))
 	if err != nil {
@@ -108,7 +133,7 @@ func main() {
 		return
 	}
 
-	if err := jpeg.Encode(outFile, img, nil); err != nil {
+	if err := jpeg.Encode(outFile, croppedImg, nil); err != nil {
 		fmt.Println("Erreur d'encodage de l'image:", err)
 	}
 

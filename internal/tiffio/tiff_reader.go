@@ -2,6 +2,7 @@ package tiffio
 
 import (
 	"TiffReader/internal/tiffio/model"
+	"TiffReader/internal/tiffio/tags"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -16,31 +17,31 @@ var LittleEndianSignature = [2]byte{0x49, 0x49}
 var BigEndianSignature = [2]byte{0x4d, 0x4d}
 var TiffVersion = [2]byte{0x2a, 0x00}
 
-type Reader struct {
+type TiffReader struct {
 	name      string
 	byteOrder binary.ByteOrder
 	binary    BinaryReader
 }
 
-func NewReader(binary BinaryReader) *Reader {
-	return &Reader{
+func NewTiffReader(binary BinaryReader) *TiffReader {
+	return &TiffReader{
 		binary: binary,
 	}
 }
 
-func (r *Reader) Open(name string) error {
+func (r *TiffReader) Open(name string) error {
 	r.name = name
 	return r.binary.open(name)
 }
 
-func (r *Reader) Close() {
+func (r *TiffReader) Close() {
 	err := r.binary.close()
 	if err != nil {
 		log.Fatalf("unable to close %s", r.name)
 	}
 }
 
-func (r *Reader) ReadHeader() (int64, error) {
+func (r *TiffReader) ReadHeader() (int64, error) {
 	_, err := r.binary.seek(0)
 	if err != nil {
 		return -1, fmt.Errorf("cannot seek to header: %w", err)
@@ -66,7 +67,7 @@ func (r *Reader) ReadHeader() (int64, error) {
 	return nextIFD, nil
 }
 
-func (r *Reader) ReadIFD(offset int64) (model.IFD, error) {
+func (r *TiffReader) ReadIFD(offset int64) (model.IFD, error) {
 	// read number of tags
 	buffer, err := r.read2BytesAt(offset)
 	if err != nil {
@@ -77,7 +78,7 @@ func (r *Reader) ReadIFD(offset int64) (model.IFD, error) {
 	offset += 2
 
 	// read tags
-	tags := make(map[model.TagID]model.Tag, nbTags)
+	tags := make(map[tags.TagID]model.Tag, nbTags)
 	for range nbTags {
 		tag, err := r.ReadTag(offset)
 		if err != nil {
@@ -112,7 +113,7 @@ func (r *Reader) ReadIFD(offset int64) (model.IFD, error) {
 //	}
 //}
 
-func (r *Reader) ReadTag(offset int64) (model.Tag, error) {
+func (r *TiffReader) ReadTag(offset int64) (model.Tag, error) {
 	buffer, err := r.readBytesAt(offset, 12)
 	if err != nil {
 		return nil, fmt.Errorf("ReadTag: cannot read: %w", err)
@@ -334,7 +335,7 @@ func (r *Reader) ReadTag(offset int64) (model.Tag, error) {
 	return nil, nil
 }
 
-func (r *Reader) readStringValuesAt(offset int64, numValues uint32) ([]string, error) {
+func (r *TiffReader) readStringValuesAt(offset int64, numValues uint32) ([]string, error) {
 	values := make([]string, numValues)
 
 	for i := range numValues {
@@ -368,7 +369,7 @@ func (r *Reader) readStringValuesAt(offset int64, numValues uint32) ([]string, e
 	return values, nil
 }
 
-func readValuesAt[T model.TagType](r *Reader, offset int64, numValues, elementSize uint32, fromBytesFn func(data []byte) T) ([]T, error) {
+func readValuesAt[T model.TagType](r *TiffReader, offset int64, numValues, elementSize uint32, fromBytesFn func(data []byte) T) ([]T, error) {
 	buffer, err := r.readBytesAt(offset, numValues*elementSize)
 	if err != nil {
 		return nil, fmt.Errorf("readValuesAt: cannot read: %w", err)
@@ -384,15 +385,15 @@ func readValuesAt[T model.TagType](r *Reader, offset int64, numValues, elementSi
 	return values, nil
 }
 
-func (r *Reader) read2BytesAt(offset int64) ([]byte, error) {
+func (r *TiffReader) read2BytesAt(offset int64) ([]byte, error) {
 	return r.readBytesAt(offset, 2)
 }
 
-func (r *Reader) read4BytesAt(offset int64) ([]byte, error) {
+func (r *TiffReader) read4BytesAt(offset int64) ([]byte, error) {
 	return r.readBytesAt(offset, 4)
 }
 
-func (r *Reader) readBytesAt(offset int64, n uint32) ([]byte, error) {
+func (r *TiffReader) readBytesAt(offset int64, n uint32) ([]byte, error) {
 	_, err := r.binary.seek(offset)
 	if err != nil {
 		return nil, fmt.Errorf("cannot seek to %d: %w", offset, err)
@@ -410,51 +411,51 @@ func (r *Reader) readBytesAt(offset int64, n uint32) ([]byte, error) {
 	return buffer, nil
 }
 
-func (r *Reader) bytesToUint16(data []byte) uint16 {
+func (r *TiffReader) bytesToUint16(data []byte) uint16 {
 	return r.byteOrder.Uint16(data)
 }
 
-func (r *Reader) bytesToUint32(data []byte) uint32 {
+func (r *TiffReader) bytesToUint32(data []byte) uint32 {
 	return r.byteOrder.Uint32(data)
 }
 
-func (r *Reader) bytesToRational(data []byte) model.Rational {
+func (r *TiffReader) bytesToRational(data []byte) model.Rational {
 	return model.Rational{
 		Numerator:   r.byteOrder.Uint32(data[0:4]),
 		Denominator: r.byteOrder.Uint32(data[4:8]),
 	}
 }
 
-func (r *Reader) bytesToInt8(data []byte) int8 {
+func (r *TiffReader) bytesToInt8(data []byte) int8 {
 	return int8(data[0])
 }
 
-func (r *Reader) bytesToInt16(data []byte) int16 {
+func (r *TiffReader) bytesToInt16(data []byte) int16 {
 	return int16(r.byteOrder.Uint16(data[0:2]))
 }
 
-func (r *Reader) bytesToInt32(data []byte) int32 {
+func (r *TiffReader) bytesToInt32(data []byte) int32 {
 	return int32(r.byteOrder.Uint32(data[0:2]))
 }
 
-func (r *Reader) bytesToSignedRational(data []byte) model.SignedRational {
+func (r *TiffReader) bytesToSignedRational(data []byte) model.SignedRational {
 	return model.SignedRational{
 		Numerator:   int32(r.byteOrder.Uint32(data[0:4])),
 		Denominator: int32(r.byteOrder.Uint32(data[4:8])),
 	}
 }
 
-func (r *Reader) bytesToFloat32(data []byte) float32 {
+func (r *TiffReader) bytesToFloat32(data []byte) float32 {
 	return float32(r.byteOrder.Uint64(data))
 }
 
-func (r *Reader) bytesToFloat64(data []byte) float64 {
+func (r *TiffReader) bytesToFloat64(data []byte) float64 {
 	return float64(r.byteOrder.Uint64(data))
 }
 
-func (r *Reader) GetTile(img model.TIFF, level, tile int) ([]byte, error) {
-	tileOffset := int64(img.IFDs[level].Tags[model.TagID(model.TileOffsets)].(model.DataTag[uint32]).Values[tile])
-	tileBytesCount := img.IFDs[level].Tags[model.TagID(model.TileByteCounts)].(model.DataTag[uint32]).Values[tile]
+func (r *TiffReader) GetTile(img model.TIFF, level, tile int) ([]byte, error) {
+	tileOffset := int64(img.Level(level).Tag(tags.TileOffsets).AsUint32s()[tile])
+	tileBytesCount := img.Level(level).Tag(tags.TileByteCounts).AsUint32s()[tile]
 
 	data, err := r.readBytesAt(tileOffset, tileBytesCount)
 	if err != nil {
@@ -462,9 +463,4 @@ func (r *Reader) GetTile(img model.TIFF, level, tile int) ([]byte, error) {
 	}
 
 	return data, nil
-}
-
-func (r *Reader) GetJPEGTables(img model.TIFF, level int) []byte {
-	data := img.IFDs[level].Tags[model.TagID(model.JPEGTables)].(model.DataTag[byte]).Values
-	return data
 }

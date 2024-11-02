@@ -10,6 +10,7 @@ import (
 )
 
 /*
+	Decode the structure of a JPEG image.
 	  SOI (Start of Image) : FFD8
 		Application Segments (APPn) : FFE0 à FFEF
 		DQT (Define Quantization Table) : FFDB
@@ -24,32 +25,37 @@ var SOI = []byte{0xFF, 0xD8}
 var APPn = []byte{0xFF, 0xE0}
 var DQT = []byte{0xFF, 0xDB}
 var DHT = []byte{0xFF, 0xC4}
-var SOF0 = []byte{0xFF, 0xC0}
-var SOF1 = []byte{0xFF, 0xC1}
-var SOF2 = []byte{0xFF, 0xC2}
-var SOF3 = []byte{0xFF, 0xC3}
 var SOS = []byte{0xFF, 0xDA}
 var EOI = []byte{0xFF, 0xD9}
 
-type Reader struct {
-}
-
-func NewReader() *Reader {
-	return &Reader{}
-}
-
-func MergeJPEGTables(main, tables model.Jpeg) (model.Jpeg, error) {
-	img := main
-	if img.DQT == nil && tables.DQT != nil {
-		img.DQT = tables.DQT
+func MergeSegments(img1, img2 []byte) ([]byte, error) {
+	jpegTile, err := parseJPEG(img1)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse JPEG: %w", err)
 	}
-	if img.DHT == nil && tables.DHT != nil {
-		img.DHT = tables.DHT
+	jpegTables, err := parseJPEG(img2)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse JPEG: %w", err)
 	}
-	return img, nil
+	merged, err := mergeJPEG(jpegTile, jpegTables)
+	if err != nil {
+		return nil, fmt.Errorf("unable to merge JPEG: %w", err)
+	}
+	encoded := encodeJPEG(merged)
+	return encoded, nil
 }
 
-func EncodeJPEG(j model.Jpeg) []byte {
+func mergeJPEG(img1, img2 model.Jpeg) (model.Jpeg, error) {
+	if img1.DQT == nil && img2.DQT != nil {
+		img1.DQT = img2.DQT
+	}
+	if img1.DHT == nil && img2.DHT != nil {
+		img1.DHT = img2.DHT
+	}
+	return img1, nil
+}
+
+func encodeJPEG(j model.Jpeg) []byte {
 	buffer := make([]byte, 0, j.TotalSize())
 	buffer = append(buffer, SOI...)
 	for _, app := range j.APPn {
@@ -67,7 +73,7 @@ func EncodeJPEG(j model.Jpeg) []byte {
 	return buffer
 }
 
-func (r *Reader) Parse(data []byte) (model.Jpeg, error) {
+func parseJPEG(data []byte) (model.Jpeg, error) {
 	var img model.Jpeg
 
 	if !isSOI(data) {
@@ -77,24 +83,24 @@ func (r *Reader) Parse(data []byte) (model.Jpeg, error) {
 	offset := 2
 
 	for offset < len(data) {
-		slog.Info("parse", "bytes", hex.EncodeToString(data[offset:]))
+		slog.Debug("parse", "bytes", hex.EncodeToString(data[offset:]))
 
 		if isDQT(data[offset:]) {
-			size, block := blockData(data[offset:])
+			size, block := jpegSegment(data[offset:])
 			img.DQT = append(img.DQT, block)
 			offset += size + 2
 			continue
 		}
 
 		if isDHT(data[offset:]) {
-			size, block := blockData(data[offset:])
+			size, block := jpegSegment(data[offset:])
 			img.DHT = append(img.DHT, block)
 			offset += size + 2
 			continue
 		}
 
 		if isSOF(data[offset:]) {
-			size, block := blockData(data[offset:])
+			size, block := jpegSegment(data[offset:])
 			img.SOF = block
 			offset += size + 2
 			continue
@@ -118,15 +124,15 @@ func (r *Reader) Parse(data []byte) (model.Jpeg, error) {
 }
 
 func isSOI(data []byte) bool {
-	return bytes.Equal(data[0:2], []byte{0xFF, 0xD8})
+	return bytes.Equal(data[0:2], SOI)
 }
 
 func isDQT(data []byte) bool {
-	return bytes.Equal(data[0:2], []byte{0xFF, 0xDB})
+	return bytes.Equal(data[:2], DQT)
 }
 
 func isDHT(data []byte) bool {
-	return bytes.Equal(data[0:2], []byte{0xFF, 0xC4})
+	return bytes.Equal(data[:2], DHT)
 }
 
 func isSOF(data []byte) bool {
@@ -134,14 +140,14 @@ func isSOF(data []byte) bool {
 }
 
 func isSOS(data []byte) bool {
-	return bytes.Equal(data[0:2], []byte{0xFF, 0xDA})
+	return bytes.Equal(data[:2], SOS)
 }
 
 func isEOI(data []byte) bool {
-	return bytes.Equal(data[0:2], []byte{0xFF, 0xD9})
+	return bytes.Equal(data[:2], EOI)
 }
 
-func blockData(data []byte) (int, []byte) {
+func jpegSegment(data []byte) (int, []byte) {
 	size := int(binary.BigEndian.Uint16(data[2:4]))
-	return size, data[0 : size+2]
+	return size, data[:size+2]
 }

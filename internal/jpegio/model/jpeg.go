@@ -28,9 +28,3 @@ func (j *Jpeg) TotalSize() int {
 
 	return totalSize
 }
-
-//var SOI = [2]byte{0xFF, 0xD8}
-//var APPn = [2]byte{0xFF, 0xE0}
-//var DQT = [2]byte{0xFF, 0xC4}
-//var SOF = [2]byte{0xFF, 0xC0}
-//var SOS = [2]byte{0xFF, 0xDA}
