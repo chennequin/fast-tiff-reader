@@ -2,6 +2,7 @@ package tiffio
 
 import (
 	"fmt"
+	"math"
 	"os"
 )
 
@@ -26,9 +27,12 @@ func (f *FileBinaryReader) close() error {
 	return f.file.Close()
 }
 
-func (f *FileBinaryReader) seek(offset int64) (int64, error) {
-	newOffset, err := f.file.Seek(offset, 0)
-	return newOffset, err
+func (f *FileBinaryReader) seek(offset uint64) (uint64, error) {
+	if offset > math.MaxInt64 {
+		return 0, fmt.Errorf("value %d exceeds int64 maximum limit", offset)
+	}
+	newOffset, err := f.file.Seek(int64(offset), 0)
+	return uint64(newOffset), err
 }
 
 func (f *FileBinaryReader) read(p []byte) (int, error) {

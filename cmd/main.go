@@ -3,10 +3,8 @@ package main
 import (
 	"TiffReader/internal/jpegio"
 	"TiffReader/internal/tiffio"
-	"TiffReader/internal/tiffio/model"
 	"TiffReader/internal/tiffio/tags"
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -15,17 +13,11 @@ import (
 	"os"
 )
 
-var ExifLittleEndianSignature = [2]byte{0x49, 0x49}
-var ExifBigEndianSignature = [2]byte{0x4d, 0x4d}
-var TiffVersion = [2]byte{0x2a, 0x00}
-
-// var globalOffset = 0
-var byteOrder binary.ByteOrder
-
 func main() {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	name := "assets/CMU-1.tiff"
+	//name := "assets/CMU-1.tiff"
+	name := "assets/Philips-1.tiff"
 
 	binaryReader := tiffio.NewFileBinaryReader()
 	tiffReader := tiffio.NewTiffReader(binaryReader)
@@ -36,29 +28,14 @@ func main() {
 	}
 	defer tiffReader.Close()
 
-	nextIFD, err := tiffReader.ReadHeader()
+	tiffImg, err := tiffReader.ReadMetaData()
 	if err != nil {
-		log.Fatalf("unable to read header: %s", err)
-	}
-
-	imageFileDirectories := make([]model.IFD, 0)
-	for nextIFD != 0 {
-		ifd, err := tiffReader.ReadIFD(nextIFD)
-		if err != nil {
-			log.Fatalf("unable to read IDF: %s", err)
-		}
-		fmt.Printf("%s\n", ifd)
-		imageFileDirectories = append(imageFileDirectories, ifd)
-		nextIFD = ifd.NextIFD
-	}
-
-	tiffImg := model.TIFF{
-		IFDs: imageFileDirectories,
+		log.Fatalf("unable to read MetaData: %s", err)
 	}
 
 	//lastIFD := tiffImg.IFDs[len(tiffImg.IFDs)-1]
 
-	level := 7
+	level := len(tiffImg.IFDs) - 2
 	tileNum := 1
 	output := fmt.Sprintf("tile_%d_%d.jpeg", level, tileNum)
 

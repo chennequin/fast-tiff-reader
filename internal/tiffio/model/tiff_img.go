@@ -27,7 +27,7 @@ func (t TIFF) String() string {
 
 type IFD struct {
 	Tags    map[tags.TagID]Tag
-	NextIFD int64
+	NextIFD uint64
 }
 
 func (d IFD) Tag(tagID tags.TagID) Tag {

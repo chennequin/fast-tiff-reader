@@ -15,6 +15,7 @@ type Tag interface {
 	AsStrings() []string
 	AsUint16s() []uint16
 	AsUint32s() []uint32
+	AsUint64s() []uint64
 	AsRationals() []Rational
 	AsSignedRationals() []SignedRational
 	AsInt8s() []int8
@@ -22,10 +23,13 @@ type Tag interface {
 	AsInt32s() []int32
 	AsFloat32s() []float32
 	AsFloat64s() []float64
+	GetUintVal(int) uint64
+	//GetIntVal() int64
+	//GetFloatVal() float64
 }
 
 type TagType interface {
-	byte | string | uint16 | uint32 | Rational | int8 | int16 | int32 | SignedRational | float32 | float64
+	byte | string | uint16 | uint32 | uint64 | Rational | int8 | int16 | int32 | int64 | SignedRational | float32 | float64
 }
 
 // --------------------------
@@ -65,6 +69,13 @@ func (t DataTag[T]) AsUint16s() []uint16 {
 func (t DataTag[T]) AsUint32s() []uint32 {
 	if uint32Tag, ok := any(t).(DataTag[uint32]); ok {
 		return uint32Tag.Values
+	}
+	return nil
+}
+
+func (t DataTag[T]) AsUint64s() []uint64 {
+	if uint64Tag, ok := any(t).(DataTag[uint64]); ok {
+		return uint64Tag.Values
 	}
 	return nil
 }
@@ -116,6 +127,21 @@ func (t DataTag[T]) AsFloat64s() []float64 {
 		return float64Tag.Values
 	}
 	return nil
+}
+
+func (t DataTag[T]) GetUintVal(idx int) uint64 {
+	switch any(t).(type) {
+	case DataTag[uint64]:
+		return any(t).(DataTag[uint64]).Values[idx]
+	case DataTag[uint32]:
+		return uint64(any(t).(DataTag[uint32]).Values[idx])
+	case DataTag[uint16]:
+		return uint64(any(t).(DataTag[uint16]).Values[idx])
+	case DataTag[uint8]:
+		return uint64(any(t).(DataTag[uint8]).Values[idx])
+	default:
+		return 0
+	}
 }
 
 func (t DataTag[T]) String() string {
