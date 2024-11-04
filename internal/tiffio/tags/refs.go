@@ -129,8 +129,8 @@ const (
 	ImageUniqueID             = TagID(uint16(42016)) // Unique identifier for the image
 )
 
-// TagsIDsLabels contains a map of TIFF tag IDs to their corresponding names
-var TagsIDsLabels = map[uint16]string{
+// IDsLabels contains a map of TIFF tag IDs to their corresponding names
+var IDsLabels = map[TagID]string{
 	254:   "NewSubfileType",
 	255:   "SubfileType",
 	256:   "ImageWidth",

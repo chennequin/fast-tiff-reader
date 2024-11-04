@@ -9,8 +9,9 @@ import (
 // TIFF tags storing metadata
 // --------------------------
 
-type Tag interface {
+type TIFFTag interface {
 	GetTagID() tags.TagID
+	ValuesCount() int
 	AsBytes() []byte
 	AsStrings() []string
 	AsUint16s() []uint16
@@ -24,8 +25,6 @@ type Tag interface {
 	AsFloat32s() []float32
 	AsFloat64s() []float64
 	GetUintVal(int) uint64
-	//GetIntVal() int64
-	//GetFloatVal() float64
 }
 
 type TagType interface {
@@ -37,12 +36,16 @@ type TagType interface {
 // --------------------------
 
 type DataTag[T TagType] struct {
-	TagID  uint16
+	TagID  tags.TagID
 	Values []T
 }
 
 func (t DataTag[T]) GetTagID() tags.TagID {
-	return tags.TagID(t.TagID)
+	return t.TagID
+}
+
+func (t DataTag[T]) ValuesCount() int {
+	return len(t.Values)
 }
 
 func (t DataTag[T]) AsBytes() []byte {
@@ -130,6 +133,9 @@ func (t DataTag[T]) AsFloat64s() []float64 {
 }
 
 func (t DataTag[T]) GetUintVal(idx int) uint64 {
+	if idx >= len(t.Values) {
+		return 0
+	}
 	switch any(t).(type) {
 	case DataTag[uint64]:
 		return any(t).(DataTag[uint64]).Values[idx]
@@ -146,29 +152,7 @@ func (t DataTag[T]) GetUintVal(idx int) uint64 {
 
 func (t DataTag[T]) String() string {
 	if len(t.Values) > 9 {
-		return fmt.Sprintf("%s: %d", tags.TagsIDsLabels[t.TagID], len(t.Values))
+		return fmt.Sprintf("%s: %d", tags.IDsLabels[t.TagID], len(t.Values))
 	}
-	return fmt.Sprintf("%s: %v", tags.TagsIDsLabels[t.TagID], t.Values)
-}
-
-// --------------------------
-// specialized structs
-// --------------------------
-
-type Rational struct {
-	Numerator   uint32
-	Denominator uint32
-}
-
-func (r Rational) String() string {
-	return fmt.Sprintf("%d/%d", r.Numerator, r.Denominator)
-}
-
-type SignedRational struct {
-	Numerator   int32
-	Denominator int32
-}
-
-func (r SignedRational) String() string {
-	return fmt.Sprintf("%d/%d", r.Numerator, r.Denominator)
+	return fmt.Sprintf("%s: %v", tags.IDsLabels[t.TagID], t.Values)
 }
