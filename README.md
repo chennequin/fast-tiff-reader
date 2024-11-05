@@ -1,5 +1,7 @@
 # TIFF reader written in Go
 
+## OpenSlideLake § OpenLakeSlide
+
 https://github.com/dsoprea/go-exif?tab=readme-ov-file
 https://openslide.org/
 https://openslide.cs.cmu.edu/download/openslide-testdata/

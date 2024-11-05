@@ -22,7 +22,8 @@ func NewSlideReader() *SlideReader {
 
 func (r *SlideReader) OpenFile(name string) error {
 	binaryReader := tiffio.NewFileBinaryReader()
-	tiffReader := tiffio.NewTiffReader(binaryReader)
+	cacheBinaryReader := tiffio.NewCacheBinaryReader(binaryReader)
+	tiffReader := tiffio.NewTiffReader(cacheBinaryReader)
 
 	err := tiffReader.Open(name)
 	if err != nil {
@@ -75,13 +76,46 @@ func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
 	}
 
 	if tileWidth != expectedWidth || tileHeight != expectedHeight {
-		encoded, err = r.cropTile(expectedWidth, expectedHeight, encoded)
+		encoded, err = r.cropImage(expectedWidth, expectedHeight, encoded)
 	}
 
 	return encoded, err
 }
 
-func (r *SlideReader) cropTile(expectedWidth, expectedHeight int, tileData []byte) ([]byte, error) {
+func (r *SlideReader) GetStrip(levelIdx, stripIdx int) ([]byte, error) {
+	level, err := r.metaData.Level(levelIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	jpegTables, err := level.Tag(tags.JPEGTables)
+	if err != nil {
+		return nil, fmt.Errorf("missing required tags: %w", err)
+	}
+
+	stripData, err := r.reader.GetStripData(r.metaData, levelIdx, stripIdx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
+	}
+
+	tileWidth, tileHeight, encoded, err := jpegio.MergeSegments(stripData, jpegTables.AsBytes())
+	if err != nil {
+		return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
+	}
+
+	expectedWidth, expectedHeight, err := r.calculateStripWidthHeight(levelIdx, stripIdx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to calculate expected strip size: %w", err)
+	}
+
+	if tileWidth != expectedWidth || tileHeight != expectedHeight {
+		encoded, err = r.cropImage(expectedWidth, expectedHeight, encoded)
+	}
+
+	return encoded, err
+}
+
+func (r *SlideReader) cropImage(expectedWidth, expectedHeight int, tileData []byte) ([]byte, error) {
 
 	img, err := jpeg.Decode(bytes.NewReader(tileData))
 	if err != nil {
@@ -104,6 +138,23 @@ func (r *SlideReader) cropTile(expectedWidth, expectedHeight int, tileData []byt
 	}
 
 	return buf.Bytes(), nil
+}
+
+func (r *SlideReader) calculateStripWidthHeight(levelIdx, tileIdx int) (int, int, error) {
+	level, err := r.metaData.Level(levelIdx)
+	if err != nil {
+		return -1, -1, err
+	}
+
+	imageTags, err := level.Tags(tags.ImageWidth, tags.ImageLength)
+	if err != nil {
+		return -1, -1, fmt.Errorf("missing required tags: %w", err)
+	}
+
+	imageWidth := int(imageTags[0].GetUintVal(0))
+	imageLength := int(imageTags[1].GetUintVal(0))
+
+	return imageWidth, imageLength, nil
 }
 
 func (r *SlideReader) calculateTileWidthHeight(levelIdx, tileIdx int) (int, int, error) {

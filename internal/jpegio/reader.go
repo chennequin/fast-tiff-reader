@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 )
 
 // Decode the structure of a JPEG image.
@@ -83,8 +82,6 @@ func parseJPEG(data []byte) (model.Jpeg, error) {
 	offset := 2
 
 	for offset < len(data) {
-		slog.Debug("parse", "bytes", hex.EncodeToString(data[offset:]))
-
 		if isDQT(data[offset:]) {
 			size, block := jpegSegment(data[offset:])
 			img.DQT = append(img.DQT, block)

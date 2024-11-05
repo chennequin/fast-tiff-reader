@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	TiffHeaderSize    = 16
-	TiffTagSize       = 12
-	BigTiffTagSize    = 20
-	TiffOffsetSize    = 4
-	BigTiffOffsetSize = 8
+	averageNumberOfTags = 20
+	TiffHeaderSize      = 16
+	TiffTagSize         = 12
+	TiffOffsetSize      = 4
+	BigTiffTagSize      = 20
+	BigTiffOffsetSize   = 8
 )
 
 var LittleEndianSignature = []byte{0x49, 0x49}
@@ -28,14 +29,14 @@ var BigTiffMarker = []byte{0x2b, 0x00}
 // TiffReader is a structure that provides methods to read TIFF files.
 // It contains a BinaryReader for reading binary data.
 type TiffReader struct {
-	binary    BinaryReader
+	binary    CachedBinaryReader
 	isBigTiff bool
 	byteOrder binary.ByteOrder
 }
 
 // NewTiffReader creates and returns a new instance of TiffReader,
 // initialized with the provided BinaryReader.
-func NewTiffReader(binary BinaryReader) *TiffReader {
+func NewTiffReader(binary CachedBinaryReader) *TiffReader {
 	return &TiffReader{
 		binary: binary,
 	}
@@ -76,6 +77,7 @@ func (r *TiffReader) ReadMetaData() (model.TIFFMetadata, error) {
 			return model.TIFFMetadata{}, fmt.Errorf("unable to read IDF: %s", err)
 		}
 		entries = append(entries, ifd)
+		slog.Debug("Metadata", "IFD", ifd)
 	}
 
 	return model.NewTIFFMetadata(entries), nil
@@ -111,6 +113,36 @@ func (r *TiffReader) GetTileData(img model.TIFFMetadata, levelIdx, tileIdx int) 
 	return data, nil
 }
 
+// GetStripData retrieves the strip data for a specific level and strip index from the TIFF image.
+func (r *TiffReader) GetStripData(img model.TIFFMetadata, levelIdx, stripIdx int) ([]byte, error) {
+	level, err := img.Level(levelIdx)
+	if err != nil {
+		return nil, err
+	}
+	stripOffsetTag, err := level.Tag(tags.StripOffsets)
+	if err != nil {
+		return nil, err
+	}
+	stripBytesCountTag, err := level.Tag(tags.StripByteCounts)
+	if err != nil {
+		return nil, err
+	}
+
+	if stripIdx >= stripOffsetTag.ValuesCount() {
+		return nil, errors.New(fmt.Sprintf("invalid stripIdx: %d", stripIdx))
+	}
+
+	stripOffset := stripOffsetTag.GetUintVal(stripIdx)
+	stripBytesCount := stripBytesCountTag.GetUintVal(stripIdx)
+
+	data, err := r.readBytesAt(stripOffset, stripBytesCount)
+	if err != nil {
+		return nil, fmt.Errorf("GetTile: cannot read strip at level %d, strip %d: %w", level, stripIdx, err)
+	}
+
+	return data, nil
+}
+
 // --------------------------
 // decode TIFF binary blocks
 // --------------------------
@@ -121,7 +153,7 @@ func (r *TiffReader) readHeader() (uint64, error) {
 		return 0, fmt.Errorf("cannot seek to header: %w", err)
 	}
 
-	slog.Debug("header", "hex", hex.EncodeToString(buffer[:TiffHeaderSize]))
+	slog.Debug("readHeader", "hex", hex.EncodeToString(buffer[:TiffHeaderSize]))
 
 	if bytes.Equal(buffer[:2], BigEndianSignature) {
 		r.byteOrder = binary.BigEndian
@@ -155,7 +187,12 @@ func (r *TiffReader) readHeader() (uint64, error) {
 }
 
 func (r *TiffReader) readIFD(offset uint64) (model.TIFFDirectory, uint64, error) {
-	buffer, err := r.read2BytesAt(offset)
+	predictedSize := uint64(2 + averageNumberOfTags*TiffTagSize)
+	if err := r.binary.readBlock(offset, predictedSize); err != nil {
+		return model.TIFFDirectory{}, 0, fmt.Errorf("readBigIFD: cannot read block: %w", err)
+	}
+
+	buffer, err := r.readBytesAt(offset, 2)
 	if err != nil {
 		return model.TIFFDirectory{}, 0, fmt.Errorf("readIFD: cannot read: %w", err)
 	}
@@ -163,6 +200,13 @@ func (r *TiffReader) readIFD(offset uint64) (model.TIFFDirectory, uint64, error)
 	// read number of tags
 	nbTags := uint64(r.byteOrder.Uint16(buffer[:2]))
 	offset += 2
+
+	// complete an un-complete pre-read
+	if realSize := 8 + nbTags*TiffTagSize; realSize > predictedSize {
+		if err = r.binary.readBlock(offset+predictedSize, realSize-predictedSize); err != nil {
+			return model.TIFFDirectory{}, 0, fmt.Errorf("readBigIFD: cannot read block: %w", err)
+		}
+	}
 
 	// read all tags
 	tagMap := make(map[tags.TagID]model.TIFFTag, nbTags)
@@ -184,7 +228,12 @@ func (r *TiffReader) readIFD(offset uint64) (model.TIFFDirectory, uint64, error)
 }
 
 func (r *TiffReader) readBigIFD(offset uint64) (model.TIFFDirectory, uint64, error) {
-	buffer, err := r.read8BytesAt(offset)
+	predictedSize := uint64(8 + averageNumberOfTags*BigTiffTagSize)
+	if err := r.binary.readBlock(offset, predictedSize); err != nil {
+		return model.TIFFDirectory{}, 0, fmt.Errorf("readBigIFD: cannot read block: %w", err)
+	}
+
+	buffer, err := r.readBytesAt(offset, 8)
 	if err != nil {
 		return model.TIFFDirectory{}, 0, fmt.Errorf("readBigIFD: cannot read: %w", err)
 	}
@@ -192,6 +241,13 @@ func (r *TiffReader) readBigIFD(offset uint64) (model.TIFFDirectory, uint64, err
 	// read number of tags
 	nbTags := r.byteOrder.Uint64(buffer[:8])
 	offset += 8
+
+	// complete an un-complete pre-read
+	if realSize := 8 + nbTags*BigTiffTagSize; realSize > predictedSize {
+		if err = r.binary.readBlock(offset+predictedSize, realSize-predictedSize); err != nil {
+			return model.TIFFDirectory{}, 0, fmt.Errorf("readBigIFD: cannot read block: %w", err)
+		}
+	}
 
 	// read tags
 	tagMap := make(map[tags.TagID]model.TIFFTag, nbTags)
@@ -321,7 +377,7 @@ func (r *TiffReader) readTag(offset uint64) (model.TIFFTag, error) {
 		return nil, fmt.Errorf("readTag: cannot read: %w", err)
 	}
 
-	slog.Debug("header", "hex", hex.EncodeToString(buffer[:TiffTagSize]))
+	slog.Debug("readTag", "hex", hex.EncodeToString(buffer[:TiffTagSize]))
 
 	tagID := r.byteOrder.Uint16(buffer[:2])
 	tagType := r.byteOrder.Uint16(buffer[2:4])
@@ -340,7 +396,7 @@ func (r *TiffReader) readBigTag(offset uint64) (model.TIFFTag, error) {
 		return nil, fmt.Errorf("readBigTag: cannot read: %w", err)
 	}
 
-	slog.Debug("header", "hex", hex.EncodeToString(buffer[:BigTiffTagSize]))
+	slog.Debug("readBigTag", "hex", hex.EncodeToString(buffer[:BigTiffTagSize]))
 
 	tagID := r.byteOrder.Uint16(buffer[:2])
 	tagType := r.byteOrder.Uint16(buffer[2:4])
@@ -358,7 +414,7 @@ func (r *TiffReader) readBigTag(offset uint64) (model.TIFFTag, error) {
 // --------------------------
 
 func (r *TiffReader) read4BytesOffsetAt(offset uint64) (uint64, error) {
-	buffer, err := r.read4BytesAt(offset)
+	buffer, err := r.readBytesAt(offset, 4)
 	if err != nil {
 		return 0, err
 	}
@@ -367,7 +423,7 @@ func (r *TiffReader) read4BytesOffsetAt(offset uint64) (uint64, error) {
 }
 
 func (r *TiffReader) read8BytesOffsetAt(offset uint64) (uint64, error) {
-	buffer, err := r.read8BytesAt(offset)
+	buffer, err := r.readBytesAt(offset, 8)
 	if err != nil {
 		return 0, err
 	}
@@ -375,26 +431,9 @@ func (r *TiffReader) read8BytesOffsetAt(offset uint64) (uint64, error) {
 	return nextOffset, nil
 }
 
-func (r *TiffReader) read2BytesAt(offset uint64) ([]byte, error) {
-	return r.readBytesAt(offset, 2)
-}
-
-func (r *TiffReader) read4BytesAt(offset uint64) ([]byte, error) {
-	return r.readBytesAt(offset, 4)
-}
-
-func (r *TiffReader) read8BytesAt(offset uint64) ([]byte, error) {
-	return r.readBytesAt(offset, 8)
-}
-
 func (r *TiffReader) readBytesAt(offset uint64, n uint64) ([]byte, error) {
-	_, err := r.binary.seek(offset)
-	if err != nil {
-		return nil, fmt.Errorf("cannot seek to %d: %w", offset, err)
-	}
-
 	buffer := make([]byte, n)
-	bytesRead, err := r.binary.read(buffer)
+	bytesRead, err := r.binary.read(offset, buffer)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read %d bytes at %d: %w", n, offset, err)
 	}
@@ -467,6 +506,7 @@ func (r *TiffReader) readValuesBytes(buffer []byte, numValues uint64) ([]byte, e
 	if r.isValidSize(numValues, 1) {
 		return buffer[0:numValues], nil
 	}
+	// TODO in //
 	rOffset := r.offsetFrom(buffer)
 	values, err := r.readBytesAt(rOffset, numValues)
 	return values, err
