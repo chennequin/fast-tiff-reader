@@ -4,6 +4,7 @@ type JpegBinBlock []byte
 
 type Jpeg struct {
 	APPn []JpegBinBlock // Application Segments
+	DRI  []JpegBinBlock // Define Restart Interval
 	DQT  []JpegBinBlock // Define Quantization Table
 	DHT  []JpegBinBlock // Define Huffman Table
 	SOF  JpegBinBlock   // Start of Frame

@@ -10,14 +10,19 @@ import (
 )
 
 func main() {
-	slog.SetLogLoggerLevel(slog.LevelInfo)
-	//slog.SetLogLoggerLevel(slog.LevelDebug)
+	//slog.SetLogLoggerLevel(slog.LevelInfo)
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	//name := "assets/CMU-1.tiff"
-	//name := "assets/Philips-1.tiff"
-	//name := "assets/Philips-2.tiff"
-	name := "assets/Philips-3.tiff"
-	//name := "assets/Philips-4.tiff"
+	//name := "assets/generic/CMU-1.tiff"
+	//name := "assets/philips/Philips-1.tiff"
+	//name := "assets/philips/Philips-2.tiff"
+	//name := "assets/philips/Philips-3.tiff"
+	//name := "assets/philips/Philips-4.tiff"
+	//name := "assets/trestle/CMU-1.tif"
+	//name := "assets/trestle/CMU-2.tif"
+	//name := "assets/trestle/CMU-3.tif"
+	name := "assets/leica/Leica-1.scn"
+	//name := "assets/leica/Leica-Fluorescence-1.scn"
 
 	start := time.Now()
 
@@ -27,7 +32,7 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	levelIdx := reader.LevelCount() - 3
+	levelIdx := reader.LevelCount() - 1
 	tileIdx := 0
 
 	tile, err := reader.GetTile(levelIdx, tileIdx)

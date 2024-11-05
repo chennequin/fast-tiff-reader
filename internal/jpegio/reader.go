@@ -11,6 +11,7 @@ import (
 // Decode the structure of a JPEG image.
 // SOI (Start of Image): 0xFFD8
 // Application Segments (APPn): 0xFFE0 to 0xFFEF
+// DRI (Define Restart Interval - 0xFFDD)
 // DQT (Define Quantization Table): 0xFFDB
 // DHT (Define Huffman Table): 0xFFC4 (often located just after the DQT segment).
 // SOF (Start of Frame): 0xFFC0, 0xFFC1, etc. (describes the image dimensions and components).
@@ -20,10 +21,12 @@ import (
 
 var SOI = []byte{0xFF, 0xD8}
 var APPn = []byte{0xFF, 0xE0}
+var DRI = []byte{0xFF, 0xDD}
 var DQT = []byte{0xFF, 0xDB}
 var DHT = []byte{0xFF, 0xC4}
 var SOS = []byte{0xFF, 0xDA}
 var EOI = []byte{0xFF, 0xD9}
+var CMT = []byte{0xFF, 0xFE}
 
 // MergeSegments combines two JPEG images by appending the Huffman and Quantization tables from the second image to the first.
 func MergeSegments(img1, img2 []byte) (int, int, []byte, error) {
@@ -42,6 +45,14 @@ func MergeSegments(img1, img2 []byte) (int, int, []byte, error) {
 	encoded := encodeJPEG(merged)
 	width, height, err := decodeSOF(merged.SOF)
 	return width, height, encoded, err
+}
+
+func DecodeSOF(img []byte) (int, int, error) {
+	jpegTile, err := parseJPEG(img)
+	if err != nil {
+		return 0, 0, fmt.Errorf("unable to parse JPEG: %w", err)
+	}
+	return decodeSOF(jpegTile.SOF)
 }
 
 func mergeJPEG(img1, img2 model.Jpeg) (model.Jpeg, error) {
@@ -82,6 +93,20 @@ func parseJPEG(data []byte) (model.Jpeg, error) {
 	offset := 2
 
 	for offset < len(data) {
+		if isAPPn(data[offset:]) {
+			size, block := jpegSegment(data[offset:])
+			img.APPn = append(img.APPn, block)
+			offset += size + 2
+			continue
+		}
+
+		if isDRI(data[offset:]) {
+			size, block := jpegSegment(data[offset:])
+			img.DRI = append(img.DRI, block)
+			offset += size + 2
+			continue
+		}
+
 		if isDQT(data[offset:]) {
 			size, block := jpegSegment(data[offset:])
 			img.DQT = append(img.DQT, block)
@@ -114,6 +139,12 @@ func parseJPEG(data []byte) (model.Jpeg, error) {
 			continue
 		}
 
+		if isCMT(data[offset:]) {
+			size, _ := jpegSegment(data[offset:])
+			offset += size + 2
+			continue
+		}
+
 		return img, fmt.Errorf("invalid JPEG format: unknown block 0x%s", hex.EncodeToString(data[offset:offset+2]))
 	}
 
@@ -122,6 +153,14 @@ func parseJPEG(data []byte) (model.Jpeg, error) {
 
 func isSOI(data []byte) bool {
 	return bytes.Equal(data[0:2], SOI)
+}
+
+func isAPPn(data []byte) bool {
+	return data[0] == APPn[0] && (data[1]&0xf0) == APPn[1]
+}
+
+func isDRI(data []byte) bool {
+	return bytes.Equal(data[:2], DRI)
 }
 
 func isDQT(data []byte) bool {
@@ -142,6 +181,10 @@ func isSOS(data []byte) bool {
 
 func isEOI(data []byte) bool {
 	return bytes.Equal(data[:2], EOI)
+}
+
+func isCMT(data []byte) bool {
+	return bytes.Equal(data[:2], CMT)
 }
 
 func jpegSegment(data []byte) (int, []byte) {

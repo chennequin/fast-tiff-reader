@@ -558,15 +558,11 @@ func (r *TiffReader) readValuesDoubles(buffer []byte, numValues uint64) ([]float
 }
 
 func (r *TiffReader) readValuesRationals(buffer []byte, numValues uint64) ([]model.Rational, error) {
-	rOffset := r.offsetFrom(buffer)
-	values, err := readValuesFnAt(r, rOffset, numValues, 8, r.bytesToRational)
-	return values, err
+	return readValuesFn(r, buffer, numValues, 8, r.bytesToRational)
 }
 
 func (r *TiffReader) readValuesSignedRationals(buffer []byte, numValues uint64) ([]model.SignedRational, error) {
-	rOffset := r.offsetFrom(buffer)
-	values, err := readValuesFnAt(r, rOffset, numValues, 8, r.bytesToSignedRational)
-	return values, err
+	return readValuesFn(r, buffer, numValues, 8, r.bytesToSignedRational)
 }
 
 func readValuesFn[T model.TagType](r *TiffReader, buffer []byte, numValues, size uint64, fromBytesFn func([]byte) T) ([]T, error) {

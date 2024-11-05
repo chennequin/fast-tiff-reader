@@ -50,24 +50,36 @@ func (r *SlideReader) LevelCount() int {
 }
 
 func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
-	level, err := r.metaData.Level(levelIdx)
+	var level model.TIFFDirectory
+	var err error
+
+	level, err = r.metaData.Level(levelIdx)
 	if err != nil {
 		return nil, err
 	}
 
-	jpegTables, err := level.Tag(tags.JPEGTables)
-	if err != nil {
-		return nil, fmt.Errorf("missing required tags: %w", err)
-	}
-
-	tileData, err := r.reader.GetTileData(r.metaData, levelIdx, tileIdx)
+	var tileData []byte
+	tileData, err = r.reader.GetTileData(r.metaData, levelIdx, tileIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain tile data: %w", err)
 	}
 
-	tileWidth, tileHeight, encoded, err := jpegio.MergeSegments(tileData, jpegTables.AsBytes())
-	if err != nil {
-		return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
+	var tileWidth, tileHeight int
+	var encoded []byte
+	var jpegTables model.TIFFTag
+
+	if jpegTables, err = level.Tag(tags.JPEGTables); err == nil {
+		tileWidth, tileHeight, encoded, err = jpegio.MergeSegments(tileData, jpegTables.AsBytes())
+		if err != nil {
+			return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
+		}
+	} else {
+		// JPEGTables is not present in Metadata
+		tileWidth, tileHeight, err = jpegio.DecodeSOF(tileData)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode JPEG segment: %w", err)
+		}
+		encoded = tileData
 	}
 
 	expectedWidth, expectedHeight, err := r.calculateTileWidthHeight(levelIdx, tileIdx)
