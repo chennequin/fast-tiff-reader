@@ -140,6 +140,7 @@ func parseJPEG(data []byte) (model.Jpeg, error) {
 		}
 
 		if isCMT(data[offset:]) {
+			// ignore JPEG Comment Block (0xFFFE)
 			size, _ := jpegSegment(data[offset:])
 			offset += size + 2
 			continue

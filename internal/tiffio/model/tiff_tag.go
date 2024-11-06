@@ -152,7 +152,7 @@ func (t DataTag[T]) GetUintVal(idx int) uint64 {
 
 func (t DataTag[T]) String() string {
 	if len(t.Values) > 9 {
-		return fmt.Sprintf("%s: %d", tags.IDsLabels[t.TagID], len(t.Values))
+		return fmt.Sprintf("%s: [%d]{...}", tags.IDsLabels[t.TagID], len(t.Values))
 	}
 	return fmt.Sprintf("%s: %v", tags.IDsLabels[t.TagID], t.Values)
 }

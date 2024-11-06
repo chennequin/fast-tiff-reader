@@ -255,3 +255,23 @@ var IDsLabels = map[TagID]string{
 	41996: "SubjectDistanceRange",
 	42016: "ImageUniqueID",
 }
+
+type CompressionType int
+
+const (
+	CompressionTypeJPEG = CompressionType(7)
+	CompressionTypeLZW  = CompressionType(5)
+)
+
+type PhotometricInterpretationType int
+
+const (
+	PhotometricInterpretationTypeRGB   = PhotometricInterpretationType(2)
+	PhotometricInterpretationTypeYCbCr = PhotometricInterpretationType(6)
+)
+
+type PredictorType int
+
+const (
+	PredictorTypeHorizontalDifferencing = PredictorType(2)
+)

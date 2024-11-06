@@ -10,47 +10,22 @@ https://openslide.cs.cmu.edu/download/openslide-testdata/
 
 https://docs.scanimage.org/Appendix/ScanImage%2BBigTiff%2BSpecification.html#ScanImageBigTiffSpecification-MagicNumb
 
-HEADER
 
-+--------------------+--------------------+-----------------------------+ 
-| Byte Order (2) | TIFF Identifier (2) | Offset du Premier IFD (4) | 
-+--------------------+--------------------+-----------------------------+ 
-| 0x49 0x49 | 0x2A | 0x00000020 (exemple d'offset) | 
-+--------------------+--------------------+-----------------------------+
 
-In the file header, BigTIFF is declared as 0x002B (43) at offset 2 bytes as compared with the TIFF version of 0x002A (42)
-Bytesize of offsets is always 8 in BigTIFF (not present in TIFF)
-IFD (Image File Directory) takes up 20 bytes in BigTIFF as opposed to 12 in TIFF
-11_081553.svs (bigTIFF)
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [46000] 257:ImageLength: [32914] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n46920x33014 [0,100 46000x32914] (256x256) JPEG/RGB Q=30|AppMag = 20|StripeWidth = 2040|ScanScope ID = CPAPERIOCS|Filename = CMU-1|Date = 12/29/09|Time = 09:59:15|User = b414003d-95c6-48b0-9369-8010ed517ba7|Parmset = USM Filter|MPP = 0.4990|Left = 25.691574|Top = 23.449873|LineCameraSkew = -0.000424|LineAreaXOffset = 0.019265|LineAreaYOffset = -0.000313|Focus Offset = 0.000000|ImageID = 1004486|OriginalWidth = 46920|Originalheight = 33014|Filtered = 5|ICC Profile = ScanScope v1\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [23220]{...} 325:TileByteCounts: [23220]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1] 34675:ICCProfile: [141992]{...}]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [1024] 257:ImageLength: [732] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\n46000x32914 -> 1024x732 - |AppMag = 20|StripeWidth = 2040|ScanScope ID = CPAPERIOCS|Filename = CMU-1|Date = 12/29/09|Time = 09:59:15|User = b414003d-95c6-48b0-9369-8010ed517ba7|Parmset = USM Filter|MPP = 0.4990|Left = 25.691574|Top = 23.449873|LineCameraSkew = -0.000424|LineAreaXOffset = 0.019265|LineAreaYOffset = -0.000313|Focus Offset = 0.000000|ImageID = 1004486|OriginalWidth = 46920|Originalheight = 33014|Filtered = 5|ICC Profile = ScanScope v1\x00] 273:StripOffsets: [46]{...} 277:SamplesPerPixel: [3] 278:RowsPerStrip: [16] 279:StripByteCounts: [46]{...} 284:PlanarConfiguration: [1] 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [11500] 257:ImageLength: [8228] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n46920x33014 [0,100 46000x32914] (256x256) -> 11500x8228 JPEG/RGB Q=65\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [1485]{...} 325:TileByteCounts: [1485]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [2875] 257:ImageLength: [2057] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n46920x33014 [0,100 46000x32914] (256x256) -> 2875x2057 JPEG/RGB Q=82\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [108]{...} 325:TileByteCounts: [108]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [1] 256:ImageWidth: [387] 257:ImageLength: [463] 258:BitsPerSample: [8 8 8] 259:Compression: [5] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\nlabel 387x463\x00] 273:StripOffsets: [67]{...} 277:SamplesPerPixel: [3] 278:RowsPerStrip: [7] 279:StripByteCounts: [67]{...} 284:PlanarConfiguration: [1] 317:Predictor: [2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [9] 256:ImageWidth: [1280] 257:ImageLength: [431] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\nmacro 1280x431\x00] 273:StripOffsets: [27]{...} 277:SamplesPerPixel: [3] 278:RowsPerStrip: [16] 279:StripByteCounts: [27]{...} 284:PlanarConfiguration: [1] 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
 
-0x49 49 / 2b 00 / 08 00 00 00 / 7e d4 64 6c 00 00 00 00 / ff d8 ff e0 …
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [78000] 257:ImageLength: [30462] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n79560x30562 [0,100 78000x30462] (256x256) JPEG/RGB Q=30|AppMag = 20|StripeWidth = 2040|ScanScope ID = CPAPERIOCS|Filename = CMU-2|Date = 12/29/09|Time = 10:02:42|User = b414003d-95c6-48b0-9369-8010ed517ba7|Parmset = USM Filter|MPP = 0.4990|Left = 27.409658|Top = 20.522137|LineCameraSkew = -0.000424|LineAreaXOffset = 0.019265|LineAreaYOffset = -0.000313|Focus Offset = 0.000000|ImageID = 1004487|OriginalWidth = 79560|Originalheight = 30562|Filtered = 5|ICC Profile = ScanScope v1\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [36295]{...} 325:TileByteCounts: [36295]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1] 34675:ICCProfile: [141992]{...}]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [1024] 257:ImageLength: [399] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\n78000x30462 -> 1024x399 - |AppMag = 20|StripeWidth = 2040|ScanScope ID = CPAPERIOCS|Filename = CMU-2|Date = 12/29/09|Time = 10:02:42|User = b414003d-95c6-48b0-9369-8010ed517ba7|Parmset = USM Filter|MPP = 0.4990|Left = 27.409658|Top = 20.522137|LineCameraSkew = -0.000424|LineAreaXOffset = 0.019265|LineAreaYOffset = -0.000313|Focus Offset = 0.000000|ImageID = 1004487|OriginalWidth = 79560|Originalheight = 30562|Filtered = 5|ICC Profile = ScanScope v1\x00] 273:StripOffsets: [25]{...} 277:SamplesPerPixel: [3] 278:RowsPerStrip: [16] 279:StripByteCounts: [25]{...} 284:PlanarConfiguration: [1] 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [19500] 257:ImageLength: [7615] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n79560x30562 [0,100 78000x30462] (256x256) -> 19500x7615 JPEG/RGB Q=65\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [2310]{...} 325:TileByteCounts: [2310]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [4875] 257:ImageLength: [1903] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n79560x30562 [0,100 78000x30462] (256x256) -> 4875x1903 JPEG/RGB Q=82\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [160]{...} 325:TileByteCounts: [160]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [0] 256:ImageWidth: [2437] 257:ImageLength: [951] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\r\n79560x30562 [0,100 78000x30462] (256x256) -> 2437x951 JPEG/RGB Q=91\x00] 277:SamplesPerPixel: [3] 284:PlanarConfiguration: [1] 322:TileWidth: [256] 323:TileLength: [256] 324:TileOffsets: [40]{...} 325:TileByteCounts: [40]{...} 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [1] 256:ImageWidth: [387] 257:ImageLength: [463] 258:BitsPerSample: [8 8 8] 259:Compression: [5] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\nlabel 387x463\x00] 273:StripOffsets: [67]{...} 277:SamplesPerPixel: [3] 278:RowsPerStrip: [7] 279:StripByteCounts: [67]{...} 284:PlanarConfiguration: [1] 317:Predictor: [2] 32997:: [1]]"
+IFD="map[254:NewSubfileType: [9] 256:ImageWidth: [1280] 257:ImageLength: [431] 258:BitsPerSample: [8 8 8] 259:Compression: [7] 262:PhotometricInterpretation: [2] 270:ImageDescription: [Aperio Image Library v10.0.51\nmacro 1280x431\x00] 273:StripOffsets: [27]{...} 277:SamplesPerPixel: [3] 278:RowsPerStrip: [16] 279:StripByteCounts: [27]{...} 284:PlanarConfiguration: [1] 347:JPEGTables: [289]{...} 530:YCbCrSubSampling: [2 2] 32997:: [1]]"
 
-CMU-1.svs (TIFF)
 
-0x49 49 / 2a 00 / 10 7a 5d 09 / 00 00 00 00 00 00 00 00 / ff d8 ff c0 …
 
-FFD8 est le marqueur de début d'une image JPEG.
-
-IFD
-
-+----------------+---------------------------------+ | Nombre de Tags | 2 octets | +----------------+---------------------------------+ | Tag ID | 2 octets | | Type | 2 octets | | Count | 4 octets | | Value/Offset | 4 octets | +----------------+---------------------------------+ | Tag ID | 2 octets | | Type | 2 octets | | Count | 4 octets | | Value/Offset | 4 octets | +----------------+---------------------------------+ | ... (n tags) | | +----------------+---------------------------------+ | Offset vers le | 4 octets (offset ou 0) | | prochain IFD | | +----------------+---------------------------------+
-
-TAG
-
-+---------+---------+---------+----------+ | Tag ID | Type | Count | Value/ | | | | | Offset | +---------+---------+---------+----------+ | 256 | 3 | 1 | 0x10 | (ex. ImageWidth) +---------+---------+---------+----------+
-
-Types de Tags :
-
-0x0001 - BYTE
-0x0002 - ASCII
-0x0003 - SHORT
-0x0004 - LONG
-0x0005 - RATIONAL
-0x0006 - SBYTE
-0x0007 - UNDEFINED
-0x0008 - SSHORT
-0x0009 - SLONG
-0x000A - SRATIONAL
-0x000B - FLOAT
-0x000C - DOUBLE
-0x000D - LONG8 (pour 64 bits)

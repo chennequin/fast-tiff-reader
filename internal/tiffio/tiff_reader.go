@@ -4,6 +4,7 @@ import (
 	"TiffReader/internal/tiffio/model"
 	"TiffReader/internal/tiffio/tags"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,8 @@ import (
 	"log"
 	"log/slog"
 )
+
+const LogLevelTrace = -5
 
 const (
 	averageNumberOfTags = 20
@@ -284,10 +287,8 @@ func (r *TiffReader) offsetFrom(buffer []byte) uint64 {
 
 func (r *TiffReader) readTagValues(buffer []byte, tagID, tagType uint16, numValues uint64) (model.TIFFTag, error) {
 	switch tagType {
-	// byte
-	case 0x1:
-	// undefined
-	case 0x7:
+	// byte, undefined
+	case 0x1, 0x7:
 		values, err := r.readValuesBytes(buffer, numValues)
 		tag := model.DataTag[byte]{TagID: tags.TagID(tagID), Values: values}
 		return tag, err
@@ -363,12 +364,9 @@ func (r *TiffReader) readTagValues(buffer []byte, tagID, tagType uint16, numValu
 		values, err := r.readValuesSignedLong8s(buffer, numValues)
 		tag := model.DataTag[int64]{TagID: tags.TagID(tagID), Values: values}
 		return tag, err
-
-	default:
-		return nil, errors.New(fmt.Sprintf("unknown tag type: %d", tagType))
 	}
 
-	return nil, nil
+	return nil, errors.New(fmt.Sprintf("unknown tag type: %d", tagType))
 }
 
 func (r *TiffReader) readTag(offset uint64) (model.TIFFTag, error) {
@@ -377,7 +375,8 @@ func (r *TiffReader) readTag(offset uint64) (model.TIFFTag, error) {
 		return nil, fmt.Errorf("readTag: cannot read: %w", err)
 	}
 
-	slog.Debug("readTag", "hex", hex.EncodeToString(buffer[:TiffTagSize]))
+	//slog.Debug("readTag", "hex", hex.EncodeToString(buffer[:TiffTagSize]))
+	slog.Log(context.Background(), LogLevelTrace, "readTag", "hex", hex.EncodeToString(buffer[:TiffTagSize]))
 
 	tagID := r.byteOrder.Uint16(buffer[:2])
 	tagType := r.byteOrder.Uint16(buffer[2:4])
