@@ -5,43 +5,6 @@ import (
 	"fmt"
 )
 
-// --------------------------
-// TIFF (Tagged Image File Format)
-// --------------------------
-
-type TIFFMetadata struct {
-	entries  []TIFFDirectory
-	pyramids map[string][]TIFFDirectory
-}
-
-func NewTIFFMetadata(entries []TIFFDirectory) TIFFMetadata {
-	m := make(map[string][]TIFFDirectory)
-	for _, entry := range entries {
-		pyramidID := entry.GetPyramidID()
-		m[pyramidID] = append(m[pyramidID], entry)
-	}
-	return TIFFMetadata{entries: entries, pyramids: m}
-}
-
-func (t TIFFMetadata) Level(level int) (TIFFDirectory, error) {
-	if level >= len(t.entries) {
-		return TIFFDirectory{}, fmt.Errorf("level out of range: %d", level)
-	}
-	return t.entries[level], nil
-}
-
-func (t TIFFMetadata) LevelCount() int {
-	return len(t.entries)
-}
-
-func (t TIFFMetadata) String() string {
-	return fmt.Sprintf("%v", t.pyramids)
-}
-
-// --------------------------
-// IFD (Image File Directory)
-// --------------------------
-
 type TIFFDirectory struct {
 	tags map[tags.TagID]TIFFTag
 }
@@ -58,9 +21,8 @@ func (d TIFFDirectory) GetPyramidID() string {
 	width := getOrZero(tags.TileWidth)
 	height := getOrZero(tags.TileLength)
 	rowsPerStrip := getOrZero(tags.RowsPerStrip)
-	subFileType := getOrZero(tags.NewSubfileType)
-	return fmt.Sprintf("TileWidth:%d, TileLength:%d, RowsPerStrip:%d, NewSubfileType:%s",
-		width, height, rowsPerStrip, subFileType)
+	return fmt.Sprintf("TileWidth:%d, TileLength:%d, RowsPerStrip:%d",
+		width, height, rowsPerStrip)
 }
 
 func (d TIFFDirectory) GetImageWidth() (int, error) {
@@ -123,12 +85,28 @@ func (d TIFFDirectory) GetPredictor() (tags.PredictorType, error) {
 	return tags.PredictorType(predictor), nil
 }
 
+func (d TIFFDirectory) GetJPEGTables() ([]byte, error) {
+	jpegTables, err := d.Tag(tags.JPEGTables)
+	if err != nil {
+		return nil, err
+	}
+	return jpegTables.AsBytes(), nil
+}
+
+func (d TIFFDirectory) GetIccProfile() ([]byte, error) {
+	iccProfile, err := d.Tag(tags.ICCProfile)
+	if err != nil {
+		return nil, err
+	}
+	return iccProfile.AsBytes(), nil
+}
+
 func (d TIFFDirectory) GetIntTag(tagID tags.TagID) (int, error) {
 	tag, err := d.Tag(tagID)
 	if err != nil {
 		return 0, err
 	}
-	return int(tag.GetUintVal(0)), err
+	return int(tag.GetUintVal(0)), nil
 }
 
 func (d TIFFDirectory) Tag(tagID tags.TagID) (TIFFTag, error) {

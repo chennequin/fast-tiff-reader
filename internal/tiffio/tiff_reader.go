@@ -395,7 +395,7 @@ func (r *TiffReader) readBigTag(offset uint64) (model.TIFFTag, error) {
 		return nil, fmt.Errorf("readBigTag: cannot read: %w", err)
 	}
 
-	slog.Debug("readBigTag", "hex", hex.EncodeToString(buffer[:BigTiffTagSize]))
+	slog.Log(context.Background(), LogLevelTrace, "readBigTag", "hex", hex.EncodeToString(buffer[:BigTiffTagSize]))
 
 	tagID := r.byteOrder.Uint16(buffer[:2])
 	tagType := r.byteOrder.Uint16(buffer[2:4])

@@ -39,8 +39,23 @@ func (r *SlideReader) OpenFile(name string) error {
 		return fmt.Errorf("unable to read MetaData: %w", err)
 	}
 
+	// extract pyramid - filtering out the extra images
+	m := make(map[string][]model.TIFFDirectory)
+	for _, entry := range metaData.Entries {
+		pyramidID := entry.GetPyramidID()
+		m[pyramidID] = append(m[pyramidID], entry)
+	}
+
+	var longestPyramid []model.TIFFDirectory
+	for _, v := range m {
+		if len(longestPyramid) < len(v) {
+			longestPyramid = v
+		}
+	}
+
 	r.reader = tiffReader
-	r.metaData = metaData
+	r.metaData = model.TIFFMetadata{Entries: longestPyramid}
+
 	return nil
 }
 
@@ -54,7 +69,7 @@ func (r *SlideReader) LevelCount() int {
 }
 
 func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
-	tile, err := r.getRawTile(levelIdx, tileIdx)
+	tile, err := r.getRawTileJPEG(levelIdx, tileIdx)
 	if err != nil {
 		if errors.Is(err, model.NewTagNotFoundError(tags.TileOffsets)) {
 			level, err := r.metaData.Level(levelIdx)
@@ -189,7 +204,7 @@ func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
 	return tile, err
 }
 
-func (r *SlideReader) getRawTile(levelIdx, tileIdx int) ([]byte, error) {
+func (r *SlideReader) getRawTileJPEG(levelIdx, tileIdx int) ([]byte, error) {
 	level, err := r.metaData.Level(levelIdx)
 	if err != nil {
 		return nil, err
@@ -202,15 +217,19 @@ func (r *SlideReader) getRawTile(levelIdx, tileIdx int) ([]byte, error) {
 
 	var tileWidth, tileHeight int
 	var encoded []byte
-	var jpegTables model.TIFFTag
+	var jpegTablesErr, iccProfileErr error
+	var jpegTables, iccProfile []byte
 
-	if jpegTables, err = level.Tag(tags.JPEGTables); err == nil {
-		tileWidth, tileHeight, encoded, err = jpegio.MergeSegments(data, jpegTables.AsBytes())
+	jpegTables, jpegTablesErr = level.GetJPEGTables()
+	iccProfile, iccProfileErr = r.GetIccProfile(levelIdx)
+
+	if jpegTablesErr == nil || iccProfileErr == nil {
+		tileWidth, tileHeight, encoded, err = jpegio.MergeSegments(data, jpegTables, iccProfile)
 		if err != nil {
 			return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
 		}
 	} else {
-		// JPEGTables is not present in Metadata
+		// JPEGTables and ICC Profile are not present in Metadata
 		tileWidth, tileHeight, err = jpegio.DecodeSOF(data)
 		if err != nil {
 			return nil, fmt.Errorf("unable to decode JPEG segment: %w", err)
@@ -264,13 +283,20 @@ func (r *SlideReader) getRawStripJPEG(levelIdx, stripIdx int) ([]byte, error) {
 		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
 	}
 
-	if jpegTables, err := level.Tag(tags.JPEGTables); err == nil {
-		_, _, data, err = jpegio.MergeSegments(data, jpegTables.AsBytes()) // no crop operation to do in strips
+	var jpegTablesErr, iccProfileErr error
+	var jpegTables, iccProfile []byte
+
+	jpegTables, jpegTablesErr = level.GetJPEGTables()
+	iccProfile, iccProfileErr = r.GetIccProfile(levelIdx)
+
+	if jpegTablesErr == nil || iccProfileErr == nil {
+		_, _, data, err = jpegio.MergeSegments(data, jpegTables, iccProfile)
 		if err != nil {
 			return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
 		}
 	}
 
+	// no crop operation to do in strips
 	return data, err
 }
 
@@ -280,6 +306,28 @@ func (r *SlideReader) getRawStripLZW(levelIdx, stripIdx int) ([]byte, error) {
 		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
 	}
 	return data, err
+}
+
+func (r *SlideReader) GetIccProfile(levelIdx int) ([]byte, error) {
+	level, err := r.metaData.Level(levelIdx)
+	if err != nil {
+		return nil, err
+	}
+	iccProfile, err := level.GetIccProfile() // ICC profile at this level
+	if err != nil {
+		// get the ICC profile from the main image
+		for i := range r.metaData.LevelCount() {
+			level, err = r.metaData.Level(i)
+			if err != nil {
+				return nil, err
+			}
+			iccProfile, err = level.GetIccProfile()
+			if err == nil {
+				return iccProfile, nil
+			}
+		}
+	}
+	return iccProfile, nil
 }
 
 func (r *SlideReader) cropImageJPEG(expectedWidth, expectedHeight int, tileData []byte) ([]byte, error) {

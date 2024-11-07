@@ -29,21 +29,24 @@ var EOI = []byte{0xFF, 0xD9}
 var CMT = []byte{0xFF, 0xFE}
 
 // MergeSegments combines two JPEG images by appending the Huffman and Quantization tables from the second image to the first.
-func MergeSegments(img1, img2 []byte) (int, int, []byte, error) {
-	jpegTile, err := parseJPEG(img1)
+func MergeSegments(img, imgJpegTables, iccProfile []byte) (int, int, []byte, error) {
+	jpegTile, err := parseJPEG(img)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("unable to parse JPEG: %w", err)
 	}
-	jpegTables, err := parseJPEG(img2)
+	jpegTables, err := parseJPEG(imgJpegTables)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("unable to parse JPEG: %w", err)
 	}
+
 	merged, err := mergeJPEG(jpegTile, jpegTables)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("unable to merge JPEG: %w", err)
 	}
-	encoded := encodeJPEG(merged)
+
+	encoded := encodeJPEG(merged, iccProfile)
 	width, height, err := decodeSOF(merged.SOF)
+
 	return width, height, encoded, err
 }
 
@@ -65,11 +68,14 @@ func mergeJPEG(img1, img2 model.Jpeg) (model.Jpeg, error) {
 	return img1, nil
 }
 
-func encodeJPEG(j model.Jpeg) []byte {
+func encodeJPEG(j model.Jpeg, iccProfile []byte) []byte {
 	buffer := make([]byte, 0, j.TotalSize())
 	buffer = append(buffer, SOI...)
 	for _, app := range j.APPn {
 		buffer = append(buffer, app...)
+	}
+	if len(iccProfile) < 65535-4-4 {
+		buffer = append(buffer, createICCSegment(iccProfile)...)
 	}
 	for _, dqt := range j.DQT {
 		buffer = append(buffer, dqt...)
@@ -85,6 +91,10 @@ func encodeJPEG(j model.Jpeg) []byte {
 
 func parseJPEG(data []byte) (model.Jpeg, error) {
 	var img model.Jpeg
+
+	if len(data) == 0 {
+		return model.Jpeg{}, nil
+	}
 
 	if !isSOI(data) {
 		return img, fmt.Errorf("invalid JPEG format: missing SOI marker")
@@ -153,39 +163,39 @@ func parseJPEG(data []byte) (model.Jpeg, error) {
 }
 
 func isSOI(data []byte) bool {
-	return bytes.Equal(data[0:2], SOI)
+	return len(data) >= 2 && bytes.Equal(data[0:2], SOI)
 }
 
 func isAPPn(data []byte) bool {
-	return data[0] == APPn[0] && (data[1]&0xf0) == APPn[1]
+	return len(data) >= 2 && data[0] == APPn[0] && (data[1]&0xf0) == APPn[1]
 }
 
 func isDRI(data []byte) bool {
-	return bytes.Equal(data[:2], DRI)
+	return len(data) >= 2 && bytes.Equal(data[:2], DRI)
 }
 
 func isDQT(data []byte) bool {
-	return bytes.Equal(data[:2], DQT)
+	return len(data) >= 2 && bytes.Equal(data[:2], DQT)
 }
 
 func isDHT(data []byte) bool {
-	return bytes.Equal(data[:2], DHT)
+	return len(data) >= 2 && bytes.Equal(data[:2], DHT)
 }
 
 func isSOF(data []byte) bool {
-	return data[0] == 0xFF && (data[1] == 0xC0 || data[1] == 0xC1 || data[1] == 0xC2 || data[1] == 0xC3)
+	return len(data) >= 2 && data[0] == 0xFF && (data[1] == 0xC0 || data[1] == 0xC1 || data[1] == 0xC2 || data[1] == 0xC3)
 }
 
 func isSOS(data []byte) bool {
-	return bytes.Equal(data[:2], SOS)
+	return len(data) >= 2 && bytes.Equal(data[:2], SOS)
 }
 
 func isEOI(data []byte) bool {
-	return bytes.Equal(data[:2], EOI)
+	return len(data) >= 2 && bytes.Equal(data[:2], EOI)
 }
 
 func isCMT(data []byte) bool {
-	return bytes.Equal(data[:2], CMT)
+	return len(data) >= 2 && bytes.Equal(data[:2], CMT)
 }
 
 func jpegSegment(data []byte) (int, []byte) {
@@ -202,4 +212,13 @@ func decodeSOF(sofSegment []byte) (width, height int, err error) {
 	width = int(binary.BigEndian.Uint16(sofSegment[7:9]))
 
 	return width, height, nil
+}
+
+func createICCSegment(iccProfile []byte) []byte {
+	segment := []byte{0xFF, 0xE2}
+	length := uint16(len(iccProfile) + 4 + 2)
+	segment = append(segment, byte(length>>8), byte(length&0xFF))
+	segment = append(segment, []byte("ICC_")...)
+	segment = append(segment, iccProfile...)
+	return segment
 }
