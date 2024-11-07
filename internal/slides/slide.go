@@ -2,6 +2,7 @@ package slides
 
 import (
 	"TiffReader/internal/jpegio"
+	slideModel "TiffReader/internal/slides/model"
 	"TiffReader/internal/tiffio"
 	"TiffReader/internal/tiffio/model"
 	"TiffReader/internal/tiffio/tags"
@@ -13,6 +14,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/jpeg"
+	"log/slog"
 )
 
 type SlideReader struct {
@@ -39,7 +41,7 @@ func (r *SlideReader) OpenFile(name string) error {
 		return fmt.Errorf("unable to read MetaData: %w", err)
 	}
 
-	// extract pyramid - filtering out the extra images
+	// extract pyramid - filtering out the stripped images
 	m := make(map[string][]model.TIFFDirectory)
 	for _, entry := range metaData.Entries {
 		pyramidID := entry.GetPyramidID()
@@ -64,11 +66,52 @@ func (r *SlideReader) Close() {
 	r.metaData = model.TIFFMetadata{}
 }
 
+func (r *SlideReader) GetMetaData() (slideModel.PyramidImage, error) {
+	var pyramid slideModel.PyramidImage
+	pyramid.Levels = make([]slideModel.PyramidImageLevel, 0)
+	for _, level := range r.metaData.Entries {
+		imageTags, err := level.Tags(tags.ImageWidth, tags.ImageLength, tags.TileWidth, tags.TileLength)
+		if err != nil {
+			return pyramid, fmt.Errorf("missing required tags: %w", err)
+		}
+
+		imageWidth := int(imageTags[0].GetUintVal(0))
+		imageLength := int(imageTags[1].GetUintVal(0))
+		tileWidth := int(imageTags[2].GetUintVal(0))
+		tileLength := int(imageTags[3].GetUintVal(0))
+
+		tileCountHorizontal := imageWidth / tileWidth
+		if imageWidth%tileWidth > 0 {
+			tileCountHorizontal += 1
+		}
+
+		tileCountVertical := imageLength / tileLength
+		if imageLength%tileLength > 0 {
+			tileCountVertical += 1
+		}
+
+		l := slideModel.PyramidImageLevel{
+			ImageWidth:          imageWidth,
+			ImageHeight:         imageLength,
+			TileWidth:           tileWidth,
+			TileHeight:          tileLength,
+			TileCountHorizontal: tileCountHorizontal,
+			TileCountVertical:   tileCountVertical,
+		}
+
+		pyramid.Levels = append(pyramid.Levels, l)
+	}
+	slog.Debug("Pyramid Metadata", "levels", len(pyramid.Levels), "metadata", pyramid)
+	return pyramid, nil
+}
+
 func (r *SlideReader) LevelCount() int {
 	return r.metaData.LevelCount()
 }
 
 func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
+	//TODO switch with Compression instead
+	//TODO replace tileIdx with tileX, tileY
 	tile, err := r.getRawTileJPEG(levelIdx, tileIdx)
 	if err != nil {
 		if errors.Is(err, model.NewTagNotFoundError(tags.TileOffsets)) {
@@ -399,4 +442,13 @@ func actualTileHeight(imageHeight, tileHeight, tileIdx int) int {
 		return tileHeight
 	}
 	return tileHeight
+}
+
+func tileIndex(tileX, tileY, imageWidth, tileWidth int) int {
+	numTilesHorizontal := imageWidth / tileWidth
+	if imageWidth%tileWidth > 0 {
+		numTilesHorizontal += 1
+	}
+	idx := tileY*numTilesHorizontal + tileX
+	return idx
 }

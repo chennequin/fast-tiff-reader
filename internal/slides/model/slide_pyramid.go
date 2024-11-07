@@ -6,5 +6,17 @@ import (
 
 type Pyramid struct {
 	metadata model.TIFFMetadata
-	pyramids map[string][]model.TIFFDirectory
+}
+
+type PyramidImage struct {
+	Levels []PyramidImageLevel
+}
+
+type PyramidImageLevel struct {
+	ImageWidth          int
+	ImageHeight         int
+	TileWidth           int
+	TileHeight          int
+	TileCountHorizontal int
+	TileCountVertical   int
 }

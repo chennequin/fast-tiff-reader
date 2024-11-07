@@ -50,16 +50,20 @@ func main() {
 	fmt.Printf("Opening execution time: %s\n", elapsed)
 
 	levelIdx := reader.LevelCount() - 1
-	tileIdx := 0
 
 	start = time.Now()
 
-	tile, err := reader.GetTile(levelIdx, tileIdx)
+	_, err = reader.GetMetaData()
 	if err != nil {
-		log.Fatalf("unable to read tile %d at level %d/%d: %v", tileIdx, levelIdx, reader.LevelCount()-1, err)
+		log.Fatalf("%v", err)
 	}
 
-	output := fmt.Sprintf("tile_%d_%d.jpeg", levelIdx, tileIdx)
+	tile, err := reader.GetTile(levelIdx, 0)
+	if err != nil {
+		log.Fatalf("unable to read tile %d at level %d/%d: %v", 0, levelIdx, reader.LevelCount()-1, err)
+	}
+
+	output := fmt.Sprintf("tile_%d_%d.jpeg", levelIdx, 0)
 	err = os.WriteFile(output, tile, os.ModePerm)
 	if err != nil {
 		log.Fatalf("Error writing file: %v", err)
