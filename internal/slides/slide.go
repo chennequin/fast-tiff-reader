@@ -18,8 +18,8 @@ import (
 )
 
 type SlideReader struct {
-	metaData model.TIFFMetadata
-	reader   *tiffio.TiffReader
+	pyramid slideModel.SlideMetadata
+	reader  *tiffio.TiffReader
 }
 
 func NewSlideReader() *SlideReader {
@@ -36,40 +36,53 @@ func (r *SlideReader) OpenFile(name string) error {
 		return err
 	}
 
-	metaData, err := tiffReader.ReadMetaData()
+	metadata, err := tiffReader.ReadMetadata()
 	if err != nil {
-		return fmt.Errorf("unable to read MetaData: %w", err)
+		return fmt.Errorf("unable to read Metadata: %w", err)
 	}
 
-	// extract pyramid - filtering out the stripped images
-	m := make(map[string][]model.TIFFDirectory)
-	for _, entry := range metaData.Entries {
-		pyramidID := entry.GetPyramidID()
-		m[pyramidID] = append(m[pyramidID], entry)
+	// partition the directories.
+	// extract the main pyramid from extra stripped images.
+	m := make(map[string]model.TIFFMetadata)
+	for _, directory := range metadata {
+		pyramidID := directory.GetPyramidID()
+		m[pyramidID] = append(m[pyramidID], directory)
 	}
 
-	var longestPyramid []model.TIFFDirectory
-	for _, v := range m {
-		if len(longestPyramid) < len(v) {
-			longestPyramid = v
+	// extract the largest pyramid of images
+	var largestPyramidKey string
+	var extra model.TIFFMetadata
+	for k, directories := range m {
+		if len(largestPyramidKey) < len(directories) {
+			largestPyramidKey = k
+		}
+	}
+
+	// flatten the rest of images
+	for k, directories := range m {
+		if k != largestPyramidKey {
+			extra = append(extra, directories...)
 		}
 	}
 
 	r.reader = tiffReader
-	r.metaData = model.TIFFMetadata{Entries: longestPyramid}
+	r.pyramid = slideModel.SlideMetadata{
+		Directories: m[largestPyramidKey],
+		ExtraImages: extra,
+	}
 
 	return nil
 }
 
 func (r *SlideReader) Close() {
 	r.reader.Close()
-	r.metaData = model.TIFFMetadata{}
+	r.pyramid = slideModel.SlideMetadata{}
 }
 
-func (r *SlideReader) GetMetaData() (slideModel.PyramidImage, error) {
-	var pyramid slideModel.PyramidImage
-	pyramid.Levels = make([]slideModel.PyramidImageLevel, 0)
-	for _, level := range r.metaData.Entries {
+func (r *SlideReader) GetMetadata() (slideModel.PyramidImageMetadata, error) {
+	var pyramid slideModel.PyramidImageMetadata
+	pyramid.Levels = make([]slideModel.PyramidImage, 0)
+	for _, level := range r.pyramid.Directories {
 		imageTags, err := level.Tags(tags.ImageWidth, tags.ImageLength, tags.TileWidth, tags.TileLength)
 		if err != nil {
 			return pyramid, fmt.Errorf("missing required tags: %w", err)
@@ -90,7 +103,7 @@ func (r *SlideReader) GetMetaData() (slideModel.PyramidImage, error) {
 			tileCountVertical += 1
 		}
 
-		l := slideModel.PyramidImageLevel{
+		l := slideModel.PyramidImage{
 			ImageWidth:          imageWidth,
 			ImageHeight:         imageLength,
 			TileWidth:           tileWidth,
@@ -106,154 +119,37 @@ func (r *SlideReader) GetMetaData() (slideModel.PyramidImage, error) {
 }
 
 func (r *SlideReader) LevelCount() int {
-	return r.metaData.LevelCount()
+	return len(r.pyramid.Directories)
 }
 
 func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
-	//TODO switch with Compression instead
-	//TODO replace tileIdx with tileX, tileY
-	tile, err := r.getRawTileJPEG(levelIdx, tileIdx)
+	level, err := r.pyramid.Level(levelIdx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get level %d: %w", levelIdx, err)
+	}
+	tile, err := r.getRawTileJPEG(level, tileIdx)
 	if err != nil {
 		if errors.Is(err, model.NewTagNotFoundError(tags.TileOffsets)) {
-			level, err := r.metaData.Level(levelIdx)
-			if err != nil {
-				return nil, err
-			}
-			stripCount, err := level.GetStripCount()
-			if err != nil {
-				return nil, err
-			}
-			widthImage, err := level.GetImageWidth()
-			if err != nil {
-				return nil, err
-			}
-			heightImage, err := level.GetImageHeight()
-			if err != nil {
-				return nil, err
-			}
-			rowsPerStrip, err := level.GetRowsPerStrip()
-			if err != nil {
-				return nil, err
-			}
-			compression, err := level.GetCompression()
-			if err != nil {
-				return nil, err
-			}
-			finalImage := image.NewRGBA(image.Rect(0, 0, widthImage, heightImage))
-			for stripIdx := range stripCount {
-				data, err := r.getRawStrip(levelIdx, stripIdx)
-				if err != nil {
-					return nil, err
-				}
-
-				switch compression {
-				case tags.CompressionTypeJPEG:
-					img, err := jpeg.Decode(bytes.NewReader(data))
-					if err != nil {
-						return nil, fmt.Errorf("unable to decode JPEG: %w", err)
-					}
-					rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
-					draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
-
-				case tags.CompressionTypeLZW:
-					lzwReader := lzw.NewReader(bytes.NewReader(data), lzw.MSB, 8)
-
-					var decompressedData []byte
-					buf := make([]byte, 4096)
-					for {
-						n, err := lzwReader.Read(buf)
-						if err != nil {
-							if err.Error() != "EOF" {
-								return nil, fmt.Errorf("unable to read lzw: %w", err)
-							}
-							break
-						}
-						decompressedData = append(decompressedData, buf[:n]...)
-					}
-					err = lzwReader.Close()
-					if err != nil {
-						return nil, fmt.Errorf("unable to close lzw reader: %w", err)
-					}
-
-					photometricInterpretation, err := level.GetPhotometricInterpretation()
-					if err != nil {
-						return nil, err
-					}
-
-					predictor, err := level.GetPredictor()
-					if err != nil {
-						return nil, err
-					}
-
-					switch photometricInterpretation {
-					case tags.PhotometricInterpretationTypeRGB:
-						img := image.NewRGBA(image.Rect(0, 0, widthImage, rowsPerStrip))
-						for y := 0; y < rowsPerStrip; y++ {
-							var previousRed, previousGreen, previousBlue byte
-							for x := 0; x < widthImage; x++ {
-								if index := (y*widthImage + x) * 3; index < len(decompressedData) {
-									var red, green, blue byte
-									if predictor == tags.PredictorTypeHorizontalDifferencing {
-										red = previousRed + decompressedData[index]
-										green = previousGreen + decompressedData[index+1]
-										blue = previousBlue + decompressedData[index+2]
-									} else {
-										red = decompressedData[index]
-										green = decompressedData[index+1]
-										blue = decompressedData[index+2]
-									}
-									c := color.RGBA{
-										R: red,
-										G: green,
-										B: blue,
-										A: 255,
-									}
-									img.Set(x, y, c)
-
-									previousRed = red
-									previousGreen = green
-									previousBlue = blue
-								}
-							}
-						}
-						rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
-						draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
-
-					case tags.PhotometricInterpretationTypeYCbCr:
-						img := image.NewYCbCr(image.Rect(0, 0, widthImage, rowsPerStrip), image.YCbCrSubsampleRatio422)
-
-						copy(img.Y, decompressedData[:len(img.Y)])
-						copy(img.Cb, decompressedData[len(img.Y):len(img.Y)+len(img.Cb)])
-						copy(img.Cr, decompressedData[len(img.Y)+len(img.Cb):])
-
-						rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
-						draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
-
-						return nil, fmt.Errorf("unsupported PhotometricInterpretation type: %v", compression)
-					}
-
-				default:
-					return nil, fmt.Errorf("unsupported Compression type: %v", compression)
-				}
-			}
-
-			buf := bytes.NewBuffer(make([]byte, 0))
-			if err = jpeg.Encode(buf, finalImage, nil); err != nil {
-				return nil, fmt.Errorf("unable to encode JPEG: %w", err)
-			}
-			return buf.Bytes(), err
+			return r.recomposeStripImage(level)
 		}
 	}
 	return tile, err
 }
 
-func (r *SlideReader) getRawTileJPEG(levelIdx, tileIdx int) ([]byte, error) {
-	level, err := r.metaData.Level(levelIdx)
+func (r *SlideReader) GetExtraImage(levelIdx int) ([]byte, error) {
+	level, err := r.pyramid.Extra(levelIdx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get level %d: %w", levelIdx, err)
 	}
+	data, err := r.recomposeStripImage(level)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get level %d: %w", levelIdx, err)
+	}
+	return data, nil
+}
 
-	data, err := r.reader.GetTileData(r.metaData, levelIdx, tileIdx)
+func (r *SlideReader) getRawTileJPEG(level model.TIFFDirectory, tileIdx int) ([]byte, error) {
+	data, err := r.reader.GetTileData(level, tileIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain tile data: %w", err)
 	}
@@ -264,7 +160,7 @@ func (r *SlideReader) getRawTileJPEG(levelIdx, tileIdx int) ([]byte, error) {
 	var jpegTables, iccProfile []byte
 
 	jpegTables, jpegTablesErr = level.GetJPEGTables()
-	iccProfile, iccProfileErr = r.GetIccProfile(levelIdx)
+	iccProfile, iccProfileErr = r.retrieveIccProfile(level)
 
 	if jpegTablesErr == nil || iccProfileErr == nil {
 		tileWidth, tileHeight, encoded, err = jpegio.MergeSegments(data, jpegTables, iccProfile)
@@ -280,7 +176,7 @@ func (r *SlideReader) getRawTileJPEG(levelIdx, tileIdx int) ([]byte, error) {
 		encoded = data
 	}
 
-	expectedWidth, expectedHeight, err := r.calculateTileWidthHeight(levelIdx, tileIdx)
+	expectedWidth, expectedHeight, err := r.calculateTileWidthHeight(level, tileIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to calculate expected tile size: %w", err)
 	}
@@ -292,12 +188,133 @@ func (r *SlideReader) getRawTileJPEG(levelIdx, tileIdx int) ([]byte, error) {
 	return encoded, err
 }
 
-func (r *SlideReader) getRawStrip(levelIdx, stripIdx int) ([]byte, error) {
-	level, err := r.metaData.Level(levelIdx)
+func (r *SlideReader) recomposeStripImage(level model.TIFFDirectory) ([]byte, error) {
+	stripCount, err := level.GetStripCount()
 	if err != nil {
 		return nil, err
 	}
+	widthImage, err := level.GetImageWidth()
+	if err != nil {
+		return nil, err
+	}
+	heightImage, err := level.GetImageHeight()
+	if err != nil {
+		return nil, err
+	}
+	rowsPerStrip, err := level.GetRowsPerStrip()
+	if err != nil {
+		return nil, err
+	}
+	compression, err := level.GetCompression()
+	if err != nil {
+		return nil, err
+	}
+	finalImage := image.NewRGBA(image.Rect(0, 0, widthImage, heightImage))
+	for stripIdx := range stripCount {
+		data, err := r.getRawStrip(level, stripIdx)
+		if err != nil {
+			return nil, err
+		}
 
+		switch compression {
+		case tags.CompressionTypeJPEG:
+			img, err := jpeg.Decode(bytes.NewReader(data))
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode JPEG: %w", err)
+			}
+			rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
+			draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
+
+		case tags.CompressionTypeLZW:
+			lzwReader := lzw.NewReader(bytes.NewReader(data), lzw.MSB, 8)
+
+			var decompressedData []byte
+			buf := make([]byte, 4096)
+			for {
+				n, err := lzwReader.Read(buf)
+				if err != nil {
+					if err.Error() != "EOF" {
+						return nil, fmt.Errorf("unable to read lzw: %w", err)
+					}
+					break
+				}
+				decompressedData = append(decompressedData, buf[:n]...)
+			}
+			err = lzwReader.Close()
+			if err != nil {
+				return nil, fmt.Errorf("unable to close lzw reader: %w", err)
+			}
+
+			photometricInterpretation, err := level.GetPhotometricInterpretation()
+			if err != nil {
+				return nil, err
+			}
+
+			predictor, err := level.GetPredictor()
+			if err != nil {
+				return nil, err
+			}
+
+			switch photometricInterpretation {
+			case tags.PhotometricInterpretationTypeRGB:
+				img := image.NewRGBA(image.Rect(0, 0, widthImage, rowsPerStrip))
+				for y := 0; y < rowsPerStrip; y++ {
+					var previousRed, previousGreen, previousBlue byte
+					for x := 0; x < widthImage; x++ {
+						if index := (y*widthImage + x) * 3; index < len(decompressedData) {
+							var red, green, blue byte
+							if predictor == tags.PredictorTypeHorizontalDifferencing {
+								red = previousRed + decompressedData[index]
+								green = previousGreen + decompressedData[index+1]
+								blue = previousBlue + decompressedData[index+2]
+							} else {
+								red = decompressedData[index]
+								green = decompressedData[index+1]
+								blue = decompressedData[index+2]
+							}
+							c := color.RGBA{
+								R: red,
+								G: green,
+								B: blue,
+								A: 255,
+							}
+							img.Set(x, y, c)
+
+							previousRed = red
+							previousGreen = green
+							previousBlue = blue
+						}
+					}
+				}
+				rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
+				draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
+
+			case tags.PhotometricInterpretationTypeYCbCr:
+				img := image.NewYCbCr(image.Rect(0, 0, widthImage, rowsPerStrip), image.YCbCrSubsampleRatio422)
+
+				copy(img.Y, decompressedData[:len(img.Y)])
+				copy(img.Cb, decompressedData[len(img.Y):len(img.Y)+len(img.Cb)])
+				copy(img.Cr, decompressedData[len(img.Y)+len(img.Cb):])
+
+				rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
+				draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
+
+				return nil, fmt.Errorf("unsupported PhotometricInterpretation type: %v", compression)
+			}
+
+		default:
+			return nil, fmt.Errorf("unsupported Compression type: %v", compression)
+		}
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0))
+	if err = jpeg.Encode(buf, finalImage, nil); err != nil {
+		return nil, fmt.Errorf("unable to encode JPEG: %w", err)
+	}
+	return buf.Bytes(), err
+}
+
+func (r *SlideReader) getRawStrip(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
 	compression, err := level.GetCompression()
 	if err != nil {
 		return nil, err
@@ -306,22 +323,17 @@ func (r *SlideReader) getRawStrip(levelIdx, stripIdx int) ([]byte, error) {
 	var data []byte
 	switch compression {
 	case tags.CompressionTypeJPEG:
-		data, err = r.getRawStripJPEG(levelIdx, stripIdx)
+		data, err = r.getRawStripJPEG(level, stripIdx)
 	case tags.CompressionTypeLZW:
-		data, err = r.getRawStripLZW(levelIdx, stripIdx)
+		data, err = r.getRawStripLZW(level, stripIdx)
 	default:
 		return nil, fmt.Errorf("unsupported compression type: %v", compression)
 	}
 	return data, err
 }
 
-func (r *SlideReader) getRawStripJPEG(levelIdx, stripIdx int) ([]byte, error) {
-	level, err := r.metaData.Level(levelIdx)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := r.reader.GetStripData(r.metaData, levelIdx, stripIdx)
+func (r *SlideReader) getRawStripJPEG(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
+	data, err := r.reader.GetStripData(level, stripIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
 	}
@@ -330,7 +342,7 @@ func (r *SlideReader) getRawStripJPEG(levelIdx, stripIdx int) ([]byte, error) {
 	var jpegTables, iccProfile []byte
 
 	jpegTables, jpegTablesErr = level.GetJPEGTables()
-	iccProfile, iccProfileErr = r.GetIccProfile(levelIdx)
+	iccProfile, iccProfileErr = r.retrieveIccProfile(level)
 
 	if jpegTablesErr == nil || iccProfileErr == nil {
 		_, _, data, err = jpegio.MergeSegments(data, jpegTables, iccProfile)
@@ -343,28 +355,24 @@ func (r *SlideReader) getRawStripJPEG(levelIdx, stripIdx int) ([]byte, error) {
 	return data, err
 }
 
-func (r *SlideReader) getRawStripLZW(levelIdx, stripIdx int) ([]byte, error) {
-	data, err := r.reader.GetStripData(r.metaData, levelIdx, stripIdx)
+func (r *SlideReader) getRawStripLZW(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
+	data, err := r.reader.GetStripData(level, stripIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
 	}
 	return data, err
 }
 
-func (r *SlideReader) GetIccProfile(levelIdx int) ([]byte, error) {
-	level, err := r.metaData.Level(levelIdx)
-	if err != nil {
-		return nil, err
-	}
+func (r *SlideReader) retrieveIccProfile(level model.TIFFDirectory) ([]byte, error) {
 	iccProfile, err := level.GetIccProfile() // ICC profile at this level
 	if err != nil {
 		// get the ICC profile from the main image
-		for i := range r.metaData.LevelCount() {
-			level, err = r.metaData.Level(i)
+		for i := range len(r.pyramid.Directories) {
+			l, err := r.pyramid.Level(i)
 			if err != nil {
 				return nil, err
 			}
-			iccProfile, err = level.GetIccProfile()
+			iccProfile, err = l.GetIccProfile()
 			if err == nil {
 				return iccProfile, nil
 			}
@@ -398,12 +406,7 @@ func (r *SlideReader) cropImageJPEG(expectedWidth, expectedHeight int, tileData 
 	return buf.Bytes(), nil
 }
 
-func (r *SlideReader) calculateTileWidthHeight(levelIdx, tileIdx int) (int, int, error) {
-	level, err := r.metaData.Level(levelIdx)
-	if err != nil {
-		return -1, -1, err
-	}
-
+func (r *SlideReader) calculateTileWidthHeight(level model.TIFFDirectory, tileIdx int) (int, int, error) {
 	imageTags, err := level.Tags(tags.ImageWidth, tags.ImageLength, tags.TileWidth, tags.TileLength)
 	if err != nil {
 		return -1, -1, fmt.Errorf("missing required tags: %w", err)
@@ -442,13 +445,4 @@ func actualTileHeight(imageHeight, tileHeight, tileIdx int) int {
 		return tileHeight
 	}
 	return tileHeight
-}
-
-func tileIndex(tileX, tileY, imageWidth, tileWidth int) int {
-	numTilesHorizontal := imageWidth / tileWidth
-	if imageWidth%tileWidth > 0 {
-		numTilesHorizontal += 1
-	}
-	idx := tileY*numTilesHorizontal + tileX
-	return idx
 }

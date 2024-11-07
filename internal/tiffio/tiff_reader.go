@@ -59,16 +59,16 @@ func (r *TiffReader) Close() {
 	}
 }
 
-// ReadMetaData reads the TIFF metadata from the image file.
+// ReadMetadata reads the TIFF metadata from the image file.
 // It returns a TIFFMetadata structure containing the entries found.
 // In case of errors during reading, it returns an error with context.
-func (r *TiffReader) ReadMetaData() (model.TIFFMetadata, error) {
+func (r *TiffReader) ReadMetadata() (model.TIFFMetadata, error) {
 	nextOffset, err := r.readHeader()
 	if err != nil {
 		return model.TIFFMetadata{}, fmt.Errorf("unable to read header: %s", err)
 	}
 
-	entries := make([]model.TIFFDirectory, 0)
+	directories := make([]model.TIFFDirectory, 0)
 	for nextOffset != 0 {
 		var ifd model.TIFFDirectory
 		if r.isBigTiff {
@@ -79,19 +79,15 @@ func (r *TiffReader) ReadMetaData() (model.TIFFMetadata, error) {
 		if err != nil {
 			return model.TIFFMetadata{}, fmt.Errorf("unable to read IDF: %s", err)
 		}
-		entries = append(entries, ifd)
+		directories = append(directories, ifd)
 		slog.Debug("Metadata", "IFD", ifd)
 	}
 
-	return model.NewTIFFMetadata(entries), nil
+	return directories, nil
 }
 
 // GetTileData retrieves the tile data for a specific level and tile index from the TIFF image.
-func (r *TiffReader) GetTileData(img model.TIFFMetadata, levelIdx, tileIdx int) ([]byte, error) {
-	level, err := img.Level(levelIdx)
-	if err != nil {
-		return nil, err
-	}
+func (r *TiffReader) GetTileData(level model.TIFFDirectory, tileIdx int) ([]byte, error) {
 	tileOffsetTag, err := level.Tag(tags.TileOffsets)
 	if err != nil {
 		return nil, err
@@ -117,11 +113,7 @@ func (r *TiffReader) GetTileData(img model.TIFFMetadata, levelIdx, tileIdx int) 
 }
 
 // GetStripData retrieves the strip data for a specific level and strip index from the TIFF image.
-func (r *TiffReader) GetStripData(img model.TIFFMetadata, levelIdx, stripIdx int) ([]byte, error) {
-	level, err := img.Level(levelIdx)
-	if err != nil {
-		return nil, err
-	}
+func (r *TiffReader) GetStripData(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
 	stripOffsetTag, err := level.Tag(tags.StripOffsets)
 	if err != nil {
 		return nil, err

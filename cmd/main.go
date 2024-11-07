@@ -37,40 +37,53 @@ func main() {
 	//name := "assets/ventana/OS-2.bif"
 	//name := "assets/camelyon16/test_001.tif"
 	name := "assets/camelyon16/test_002.tif"
+	//name := "assets/camelyon16/test_003.tif"
 
-	start := time.Now()
-
-	reader := slides.NewSlideReader()
-	err := reader.OpenFile(name)
+	reader, err := openSlide(name)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
-	elapsed := time.Since(start)
-	fmt.Printf("Opening execution time: %s\n", elapsed)
-
-	levelIdx := reader.LevelCount() - 1
-
-	start = time.Now()
-
-	_, err = reader.GetMetaData()
+	metadata, err := reader.GetMetadata()
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
-	tile, err := reader.GetTile(levelIdx, 0)
+	levelIdx := reader.LevelCount() - 2
+	tileIdx := metadata.Levels[levelIdx].TileIndex(0, 0)
+
+	tile, err := readTile(reader, levelIdx, tileIdx)
 	if err != nil {
-		log.Fatalf("unable to read tile %d at level %d/%d: %v", 0, levelIdx, reader.LevelCount()-1, err)
+		log.Fatalf("unable to read tile %d at level %d/%d: %v", tileIdx, levelIdx, reader.LevelCount()-1, err)
 	}
 
-	output := fmt.Sprintf("tile_%d_%d.jpeg", levelIdx, 0)
-	err = os.WriteFile(output, tile, os.ModePerm)
+	err = saveTile(tile, levelIdx, tileIdx)
 	if err != nil {
 		log.Fatalf("Error writing file: %v", err)
 	}
 
-	elapsed = time.Since(start)
-	fmt.Printf("Reading execution time: %s\n", elapsed)
-
 	println("OK")
+}
+
+func openSlide(name string) (*slides.SlideReader, error) {
+	start := time.Now()
+	defer func() { fmt.Printf("Opening execution time: %s\n", time.Since(start)) }()
+
+	reader := slides.NewSlideReader()
+	err := reader.OpenFile(name)
+	return reader, err
+}
+
+func readTile(reader *slides.SlideReader, levelIdx, tileIdx int) ([]byte, error) {
+	start := time.Now()
+	defer func() { fmt.Printf("Reading execution time: %s\n", time.Since(start)) }()
+
+	tile, err := reader.GetTile(levelIdx, tileIdx)
+	return tile, err
+}
+
+func saveTile(tile []byte, levelIdx, tileIdx int) error {
+	output := fmt.Sprintf("tile_%d_%d.jpeg", levelIdx, tileIdx)
+	err := os.WriteFile(output, tile, os.ModePerm)
+	return err
 }

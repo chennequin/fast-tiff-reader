@@ -26,10 +26,10 @@ func (f *CacheBinaryReader) close() error {
 	return f.binary.close()
 }
 
-func (f *CacheBinaryReader) openMetaData() {
+func (f *CacheBinaryReader) openMetadata() {
 }
 
-func (f *CacheBinaryReader) closeMetaData() {
+func (f *CacheBinaryReader) closeMetadata() {
 	clear(f.segments)
 }
 

@@ -8,7 +8,7 @@ type BinaryReader interface {
 
 type CachedBinaryReader interface {
 	BinaryReader
-	openMetaData()
-	closeMetaData()
+	openMetadata()
+	closeMetadata()
 	readBlock(offset, size uint64) error
 }
