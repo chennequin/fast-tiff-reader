@@ -36,8 +36,8 @@ func main() {
 	//name := "assets/ventana/OS-1.bif"
 	//name := "assets/ventana/OS-2.bif"
 	//name := "assets/camelyon16/test_001.tif"
-	name := "assets/camelyon16/test_002.tif"
-	//name := "assets/camelyon16/test_003.tif"
+	//name := "assets/camelyon16/test_002.tif"
+	name := "assets/camelyon16/test_003.tif"
 
 	reader, err := openSlide(name)
 	if err != nil {
@@ -49,7 +49,7 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	levelIdx := reader.LevelCount() - 2
+	levelIdx := len(metadata.Levels) - 2
 	tileIdx := metadata.Levels[levelIdx].TileIndex(0, 0)
 
 	tile, err := readTile(reader, levelIdx, tileIdx)
