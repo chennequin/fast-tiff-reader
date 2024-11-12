@@ -1,7 +1,6 @@
 package jpegio
 
 import (
-	"TiffReader/internal/jpegio/model"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -58,7 +57,7 @@ func DecodeSOF(img []byte) (int, int, error) {
 	return decodeSOF(jpegTile.SOF)
 }
 
-func mergeJPEG(img1, img2 model.Jpeg) (model.Jpeg, error) {
+func mergeJPEG(img1, img2 Jpeg) (Jpeg, error) {
 	if img1.DQT == nil && img2.DQT != nil {
 		img1.DQT = img2.DQT
 	}
@@ -68,7 +67,7 @@ func mergeJPEG(img1, img2 model.Jpeg) (model.Jpeg, error) {
 	return img1, nil
 }
 
-func encodeJPEG(j model.Jpeg, iccProfile []byte) []byte {
+func encodeJPEG(j Jpeg, iccProfile []byte) []byte {
 	buffer := make([]byte, 0, j.TotalSize())
 	buffer = append(buffer, SOI...)
 	for _, app := range j.APPn {
@@ -89,11 +88,11 @@ func encodeJPEG(j model.Jpeg, iccProfile []byte) []byte {
 	return buffer
 }
 
-func parseJPEG(data []byte) (model.Jpeg, error) {
-	var img model.Jpeg
+func parseJPEG(data []byte) (Jpeg, error) {
+	var img Jpeg
 
 	if len(data) == 0 {
-		return model.Jpeg{}, nil
+		return Jpeg{}, nil
 	}
 
 	if !isSOI(data) {

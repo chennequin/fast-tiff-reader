@@ -2,9 +2,8 @@ package slides
 
 import (
 	"TiffReader/internal/jpegio"
-	slideModel "TiffReader/internal/slides/model"
 	"TiffReader/internal/tiffio"
-	"TiffReader/internal/tiffio/model"
+	tiffModel "TiffReader/internal/tiffio/model"
 	"TiffReader/internal/tiffio/tags"
 	"bytes"
 	"errors"
@@ -18,7 +17,7 @@ import (
 )
 
 type SlideReader struct {
-	pyramid slideModel.SlideMetadata
+	pyramid SlideMetadata
 	reader  *tiffio.TiffReader
 }
 
@@ -43,7 +42,7 @@ func (r *SlideReader) OpenFile(name string) error {
 
 	// partition the directories.
 	// extract the main pyramid from extra stripped images.
-	m := make(map[string]model.TIFFMetadata)
+	m := make(map[string]tiffModel.TIFFMetadata)
 	for _, directory := range metadata {
 		pyramidID := directory.GetPyramidID()
 		m[pyramidID] = append(m[pyramidID], directory)
@@ -51,7 +50,7 @@ func (r *SlideReader) OpenFile(name string) error {
 
 	// extract the largest pyramid of images
 	var largestPyramidKey string
-	var extra model.TIFFMetadata
+	var extra tiffModel.TIFFMetadata
 	for k, directories := range m {
 		if len(largestPyramidKey) < len(directories) {
 			largestPyramidKey = k
@@ -66,7 +65,7 @@ func (r *SlideReader) OpenFile(name string) error {
 	}
 
 	r.reader = tiffReader
-	r.pyramid = slideModel.SlideMetadata{
+	r.pyramid = SlideMetadata{
 		Directories: m[largestPyramidKey],
 		ExtraImages: extra,
 	}
@@ -76,12 +75,12 @@ func (r *SlideReader) OpenFile(name string) error {
 
 func (r *SlideReader) Close() {
 	r.reader.Close()
-	r.pyramid = slideModel.SlideMetadata{}
+	r.pyramid = SlideMetadata{}
 }
 
-func (r *SlideReader) GetMetadata() (slideModel.PyramidImageMetadata, error) {
-	var pyramid slideModel.PyramidImageMetadata
-	pyramid.Levels = make([]slideModel.PyramidImage, 0)
+func (r *SlideReader) GetMetadata() (PyramidMetadata, error) {
+	var pyramid PyramidMetadata
+	pyramid.Levels = make([]PyramidImage, 0)
 	for _, level := range r.pyramid.Directories {
 		imageTags, err := level.Tags(tags.ImageWidth, tags.ImageLength, tags.TileWidth, tags.TileLength)
 		if err != nil {
@@ -103,7 +102,7 @@ func (r *SlideReader) GetMetadata() (slideModel.PyramidImageMetadata, error) {
 			tileCountVertical += 1
 		}
 
-		l := slideModel.PyramidImage{
+		l := PyramidImage{
 			ImageWidth:          imageWidth,
 			ImageHeight:         imageLength,
 			TileWidth:           tileWidth,
@@ -118,10 +117,6 @@ func (r *SlideReader) GetMetadata() (slideModel.PyramidImageMetadata, error) {
 	return pyramid, nil
 }
 
-func (r *SlideReader) LevelCount() int {
-	return len(r.pyramid.Directories)
-}
-
 func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
 	level, err := r.pyramid.Level(levelIdx)
 	if err != nil {
@@ -129,7 +124,7 @@ func (r *SlideReader) GetTile(levelIdx, tileIdx int) ([]byte, error) {
 	}
 	tile, err := r.getRawTileJPEG(level, tileIdx)
 	if err != nil {
-		if errors.Is(err, model.NewTagNotFoundError(tags.TileOffsets)) {
+		if errors.Is(err, tiffModel.NewTagNotFoundError(tags.TileOffsets)) {
 			return r.recomposeStripImage(level)
 		}
 	}
@@ -148,7 +143,7 @@ func (r *SlideReader) GetExtraImage(levelIdx int) ([]byte, error) {
 	return data, nil
 }
 
-func (r *SlideReader) getRawTileJPEG(level model.TIFFDirectory, tileIdx int) ([]byte, error) {
+func (r *SlideReader) getRawTileJPEG(level tiffModel.TIFFDirectory, tileIdx int) ([]byte, error) {
 	data, err := r.reader.GetTileData(level, tileIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain tile data: %w", err)
@@ -188,7 +183,7 @@ func (r *SlideReader) getRawTileJPEG(level model.TIFFDirectory, tileIdx int) ([]
 	return encoded, err
 }
 
-func (r *SlideReader) recomposeStripImage(level model.TIFFDirectory) ([]byte, error) {
+func (r *SlideReader) recomposeStripImage(level tiffModel.TIFFDirectory) ([]byte, error) {
 	stripCount, err := level.GetStripCount()
 	if err != nil {
 		return nil, err
@@ -314,7 +309,7 @@ func (r *SlideReader) recomposeStripImage(level model.TIFFDirectory) ([]byte, er
 	return buf.Bytes(), err
 }
 
-func (r *SlideReader) getRawStrip(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
+func (r *SlideReader) getRawStrip(level tiffModel.TIFFDirectory, stripIdx int) ([]byte, error) {
 	compression, err := level.GetCompression()
 	if err != nil {
 		return nil, err
@@ -332,7 +327,7 @@ func (r *SlideReader) getRawStrip(level model.TIFFDirectory, stripIdx int) ([]by
 	return data, err
 }
 
-func (r *SlideReader) getRawStripJPEG(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
+func (r *SlideReader) getRawStripJPEG(level tiffModel.TIFFDirectory, stripIdx int) ([]byte, error) {
 	data, err := r.reader.GetStripData(level, stripIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
@@ -355,7 +350,7 @@ func (r *SlideReader) getRawStripJPEG(level model.TIFFDirectory, stripIdx int) (
 	return data, err
 }
 
-func (r *SlideReader) getRawStripLZW(level model.TIFFDirectory, stripIdx int) ([]byte, error) {
+func (r *SlideReader) getRawStripLZW(level tiffModel.TIFFDirectory, stripIdx int) ([]byte, error) {
 	data, err := r.reader.GetStripData(level, stripIdx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
@@ -363,7 +358,7 @@ func (r *SlideReader) getRawStripLZW(level model.TIFFDirectory, stripIdx int) ([
 	return data, err
 }
 
-func (r *SlideReader) retrieveIccProfile(level model.TIFFDirectory) ([]byte, error) {
+func (r *SlideReader) retrieveIccProfile(level tiffModel.TIFFDirectory) ([]byte, error) {
 	iccProfile, err := level.GetIccProfile() // ICC profile at this level
 	if err != nil {
 		// get the ICC profile from the main image
@@ -406,7 +401,7 @@ func (r *SlideReader) cropImageJPEG(expectedWidth, expectedHeight int, tileData 
 	return buf.Bytes(), nil
 }
 
-func (r *SlideReader) calculateTileWidthHeight(level model.TIFFDirectory, tileIdx int) (int, int, error) {
+func (r *SlideReader) calculateTileWidthHeight(level tiffModel.TIFFDirectory, tileIdx int) (int, int, error) {
 	imageTags, err := level.Tags(tags.ImageWidth, tags.ImageLength, tags.TileWidth, tags.TileLength)
 	if err != nil {
 		return -1, -1, fmt.Errorf("missing required tags: %w", err)

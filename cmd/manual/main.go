@@ -54,7 +54,7 @@ func main() {
 
 	tile, err := readTile(reader, levelIdx, tileIdx)
 	if err != nil {
-		log.Fatalf("unable to read tile %d at level %d/%d: %v", tileIdx, levelIdx, reader.LevelCount()-1, err)
+		log.Fatalf("unable to read tile %d at level %d: %v", tileIdx, levelIdx, err)
 	}
 
 	err = saveTile(tile, levelIdx, tileIdx)

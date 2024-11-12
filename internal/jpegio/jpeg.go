@@ -1,4 +1,4 @@
-package model
+package jpegio
 
 type JpegBinBlock []byte
 
