@@ -34,6 +34,7 @@ func (f *FileBinaryReader) open(name string) error {
 }
 
 func (f *FileBinaryReader) close() error {
+	slog.Info("closing file", "file", f.file.Name())
 	return f.file.Close()
 }
 

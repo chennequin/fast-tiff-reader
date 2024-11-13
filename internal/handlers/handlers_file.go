@@ -7,24 +7,23 @@ import (
 	"github.com/jxskiss/base62"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
-type TileHandlers struct {
+type FileHandlers struct {
 	assetsDirectory string
 	cache           *SlideReaderCache
 }
 
-func NewTileHandlers(directory string, cache *SlideReaderCache) *TileHandlers {
-	return &TileHandlers{
+func NewFileHandlers(directory string, cache *SlideReaderCache) *FileHandlers {
+	return &FileHandlers{
 		assetsDirectory: directory,
 		cache:           cache,
 	}
 }
 
-func (t *TileHandlers) HandleGetFileTile(c *gin.Context) {
-	tiffFile, levelIdx, x, y, err := t.handleTileParams(c)
+func (t *FileHandlers) HandleGetTile(c *gin.Context) {
+	tiffFile, levelIdx, x, y, err := handleTileParams(c)
 	if err != nil {
 		slog.Error("Error opening file", "file", tiffFile, "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -51,7 +50,7 @@ func (t *TileHandlers) HandleGetFileTile(c *gin.Context) {
 	c.Data(http.StatusOK, "image/jpeg", imageData)
 }
 
-func (t *TileHandlers) HandleOpenFile(c *gin.Context) {
+func (t *FileHandlers) HandleOpenFile(c *gin.Context) {
 	tiffFile := strings.TrimPrefix(c.Param("path"), "/")
 
 	// Encode the resource path in a URL-friendly format
@@ -80,50 +79,7 @@ func (t *TileHandlers) HandleOpenFile(c *gin.Context) {
 	})
 }
 
-func (t *TileHandlers) HandleOpenS3(c *gin.Context) {
-
-}
-
-func (t *TileHandlers) handleTileParams(c *gin.Context) (string, int, int, int, error) {
-	encoded := c.Param("tiff")
-	level := c.Param("level")
-	xyParam := c.Param("xy")
-
-	decoded, err := base62.DecodeString(encoded)
-	if err != nil {
-		return "", 0, 0, 0, fmt.Errorf("failed to base62 decode path")
-	}
-	tiffFile := string(decoded)
-
-	xy := strings.TrimSuffix(xyParam, ".jpeg")
-	if xy == xyParam {
-		return "", 0, 0, 0, fmt.Errorf("invalid tile format, expected .jpeg")
-	}
-
-	coordinates := strings.Split(xy, "_")
-	if len(coordinates) != 2 {
-		return "", 0, 0, 0, fmt.Errorf("invalid tile coordinates")
-	}
-
-	x, err := strconv.Atoi(coordinates[0])
-	if err != nil {
-		return "", 0, 0, 0, fmt.Errorf("conversion error for coordinate x")
-	}
-
-	y, err := strconv.Atoi(coordinates[1])
-	if err != nil {
-		return "", 0, 0, 0, fmt.Errorf("conversion error for coordinate y")
-	}
-
-	levelIdx, err := strconv.Atoi(level)
-	if err != nil {
-		return "", 0, 0, 0, fmt.Errorf("invalid level")
-	}
-
-	return tiffFile, levelIdx, x, y, nil
-}
-
-func (t *TileHandlers) openFileReader(tiffFile string) (*slides.SlideReader, *slides.PyramidMetadata, error) {
+func (t *FileHandlers) openFileReader(tiffFile string) (*slides.SlideReader, *slides.PyramidMetadata, error) {
 	// Determine the full path to the underlying resource (file) to be accessed
 	name := fmt.Sprintf("%s/%s", t.assetsDirectory, tiffFile)
 

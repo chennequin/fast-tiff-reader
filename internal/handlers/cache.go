@@ -37,3 +37,7 @@ func (c *SlideReaderCache) Set(tiffFile string, reader *slides.SlideReader, meta
 	}
 	c.cache.Set(tiffFile, entry)
 }
+
+func (c *SlideReaderCache) Close() {
+	c.cache.Close()
+}
