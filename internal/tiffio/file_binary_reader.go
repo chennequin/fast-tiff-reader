@@ -39,6 +39,8 @@ func (f *FileBinaryReader) close() error {
 }
 
 func (f *FileBinaryReader) read(offset uint64, p []byte) (int, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	if offset > math.MaxInt64 {
 		return 0, fmt.Errorf("value %d exceeds int64 maximum limit", offset)
 	}

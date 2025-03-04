@@ -40,9 +40,11 @@ func (t *FileHandlers) HandleGetTile(c *gin.Context) {
 		}
 	}
 
+	//TODO protect index
 	tileIdx := metadata.Levels[levelIdx].TileIndex(x, y)
 	imageData, err := reader.GetTile(levelIdx, tileIdx)
 	if err != nil {
+		slog.Error("Error while serving tile", "levelIdx", levelIdx, "x", x, "y", y, "file", tiffFile, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read tile"})
 		return
 	}

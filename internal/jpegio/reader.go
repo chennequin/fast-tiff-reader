@@ -31,16 +31,16 @@ var CMT = []byte{0xFF, 0xFE}
 func MergeSegments(img, imgJpegTables, iccProfile []byte) (int, int, []byte, error) {
 	jpegTile, err := parseJPEG(img)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("unable to parse JPEG: %w", err)
+		return 0, 0, nil, fmt.Errorf("unable to parse JPEG img: %w", err)
 	}
 	jpegTables, err := parseJPEG(imgJpegTables)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("unable to parse JPEG: %w", err)
+		return 0, 0, nil, fmt.Errorf("unable to parse JPEG imgJpegTables: %w", err)
 	}
 
 	merged, err := mergeJPEG(jpegTile, jpegTables)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("unable to merge JPEG: %w", err)
+		return 0, 0, nil, fmt.Errorf("unable to merge JPEG jpegTile x jpegTables: %w", err)
 	}
 
 	encoded := encodeJPEG(merged, iccProfile)

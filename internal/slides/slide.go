@@ -146,7 +146,7 @@ func (r *SlideReader) GetExtraImage(levelIdx int) ([]byte, error) {
 func (r *SlideReader) getRawTileJPEG(level tiffModel.TIFFDirectory, tileIdx int) ([]byte, error) {
 	data, err := r.reader.GetTileData(level, tileIdx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain tile data: %w", err)
+		return nil, fmt.Errorf("getRawTileJPEG: unable to obtain tile data: %w", err)
 	}
 
 	var tileWidth, tileHeight int
@@ -160,20 +160,20 @@ func (r *SlideReader) getRawTileJPEG(level tiffModel.TIFFDirectory, tileIdx int)
 	if jpegTablesErr == nil || iccProfileErr == nil {
 		tileWidth, tileHeight, encoded, err = jpegio.MergeSegments(data, jpegTables, iccProfile)
 		if err != nil {
-			return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
+			return nil, fmt.Errorf("getRawTileJPEG: unable to merge JPEG segments: %w", err)
 		}
 	} else {
 		// JPEGTables and ICC Profile are not present in Metadata
 		tileWidth, tileHeight, err = jpegio.DecodeSOF(data)
 		if err != nil {
-			return nil, fmt.Errorf("unable to decode JPEG segment: %w", err)
+			return nil, fmt.Errorf("getRawTileJPEG: unable to decode JPEG segment: %w", err)
 		}
 		encoded = data
 	}
 
 	expectedWidth, expectedHeight, err := r.calculateTileWidthHeight(level, tileIdx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to calculate expected tile size: %w", err)
+		return nil, fmt.Errorf("getRawTileJPEG: unable to calculate expected tile size: %w", err)
 	}
 
 	if tileWidth != expectedWidth || tileHeight != expectedHeight {
@@ -215,7 +215,7 @@ func (r *SlideReader) recomposeStripImage(level tiffModel.TIFFDirectory) ([]byte
 		case tags.CompressionTypeJPEG:
 			img, err := jpeg.Decode(bytes.NewReader(data))
 			if err != nil {
-				return nil, fmt.Errorf("unable to decode JPEG: %w", err)
+				return nil, fmt.Errorf("recomposeStripImage: unable to decode JPEG: %w", err)
 			}
 			rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
 			draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
@@ -229,7 +229,7 @@ func (r *SlideReader) recomposeStripImage(level tiffModel.TIFFDirectory) ([]byte
 				n, err := lzwReader.Read(buf)
 				if err != nil {
 					if err.Error() != "EOF" {
-						return nil, fmt.Errorf("unable to read lzw: %w", err)
+						return nil, fmt.Errorf("recomposeStripImage: unable to read lzw: %w", err)
 					}
 					break
 				}
@@ -237,7 +237,7 @@ func (r *SlideReader) recomposeStripImage(level tiffModel.TIFFDirectory) ([]byte
 			}
 			err = lzwReader.Close()
 			if err != nil {
-				return nil, fmt.Errorf("unable to close lzw reader: %w", err)
+				return nil, fmt.Errorf("recomposeStripImage: unable to close lzw reader: %w", err)
 			}
 
 			photometricInterpretation, err := level.GetPhotometricInterpretation()
@@ -294,17 +294,17 @@ func (r *SlideReader) recomposeStripImage(level tiffModel.TIFFDirectory) ([]byte
 				rect := image.Rect(0, rowsPerStrip*stripIdx, 0+widthImage, rowsPerStrip*stripIdx+rowsPerStrip)
 				draw.Draw(finalImage, rect, img, image.Point{}, draw.Over)
 
-				return nil, fmt.Errorf("unsupported PhotometricInterpretation type: %v", compression)
+				return nil, fmt.Errorf("recomposeStripImage: unsupported PhotometricInterpretation type: %v", compression)
 			}
 
 		default:
-			return nil, fmt.Errorf("unsupported Compression type: %v", compression)
+			return nil, fmt.Errorf("recomposeStripImage: unsupported Compression type: %v", compression)
 		}
 	}
 
 	buf := bytes.NewBuffer(make([]byte, 0))
 	if err = jpeg.Encode(buf, finalImage, nil); err != nil {
-		return nil, fmt.Errorf("unable to encode JPEG: %w", err)
+		return nil, fmt.Errorf("recomposeStripImage: unable to encode JPEG: %w", err)
 	}
 	return buf.Bytes(), err
 }
@@ -322,7 +322,7 @@ func (r *SlideReader) getRawStrip(level tiffModel.TIFFDirectory, stripIdx int) (
 	case tags.CompressionTypeLZW:
 		data, err = r.getRawStripLZW(level, stripIdx)
 	default:
-		return nil, fmt.Errorf("unsupported compression type: %v", compression)
+		return nil, fmt.Errorf("getRawStrip: unsupported compression type: %v", compression)
 	}
 	return data, err
 }
@@ -330,7 +330,7 @@ func (r *SlideReader) getRawStrip(level tiffModel.TIFFDirectory, stripIdx int) (
 func (r *SlideReader) getRawStripJPEG(level tiffModel.TIFFDirectory, stripIdx int) ([]byte, error) {
 	data, err := r.reader.GetStripData(level, stripIdx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
+		return nil, fmt.Errorf("getRawStripJPEG: unable to obtain strip data: %w", err)
 	}
 
 	var jpegTablesErr, iccProfileErr error
@@ -342,7 +342,7 @@ func (r *SlideReader) getRawStripJPEG(level tiffModel.TIFFDirectory, stripIdx in
 	if jpegTablesErr == nil || iccProfileErr == nil {
 		_, _, data, err = jpegio.MergeSegments(data, jpegTables, iccProfile)
 		if err != nil {
-			return nil, fmt.Errorf("unable to merge JPEG segments: %w", err)
+			return nil, fmt.Errorf("getRawStripJPEG: unable to merge JPEG segments: %w", err)
 		}
 	}
 
@@ -353,7 +353,7 @@ func (r *SlideReader) getRawStripJPEG(level tiffModel.TIFFDirectory, stripIdx in
 func (r *SlideReader) getRawStripLZW(level tiffModel.TIFFDirectory, stripIdx int) ([]byte, error) {
 	data, err := r.reader.GetStripData(level, stripIdx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain strip data: %w", err)
+		return nil, fmt.Errorf("getRawStripLZW: unable to obtain strip data: %w", err)
 	}
 	return data, err
 }
@@ -380,7 +380,7 @@ func (r *SlideReader) cropImageJPEG(expectedWidth, expectedHeight int, tileData 
 
 	img, err := jpeg.Decode(bytes.NewReader(tileData))
 	if err != nil {
-		return nil, fmt.Errorf("unable to decode JPEG: %w", err)
+		return nil, fmt.Errorf("cropImageJPEG: unable to decode JPEG: %w", err)
 	}
 
 	cropRect := image.Rect(0, 0, expectedWidth, expectedHeight)
@@ -388,7 +388,7 @@ func (r *SlideReader) cropImageJPEG(expectedWidth, expectedHeight int, tileData 
 		SubImage(r image.Rectangle) image.Image
 	})
 	if !ok {
-		return nil, fmt.Errorf("image does not support cropping")
+		return nil, fmt.Errorf("cropImageJPEG: image does not support cropping")
 	}
 
 	cropped := croppedImg.SubImage(cropRect)
