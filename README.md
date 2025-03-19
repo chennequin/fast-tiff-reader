@@ -21,27 +21,30 @@ http://localhost:8080/files/mZWa05SMtUVTD9yYpJXZuV2Z/levels/7/tiles/0_0.jpeg
 [GIN] 2025/02/24 - 10:34:54 | 200 |       542.9µs |             ::1 | GET      "/files/mZWa05SMtUVTD9yYpJXZuV2Z/levels/7/tiles/0_0.jpeg"
 ```
 
+Example:
+
+![tile.jpeg](tile.jpeg)
+
 # NOTES:
 
 ## Assets
-https://camelyon17.grand-challenge.org/Data/
-
-https://openslide.org/
-https://openslide.cs.cmu.edu/download/openslide-testdata/
+- https://camelyon17.grand-challenge.org/Data/
+- https://openslide.org/
+- https://openslide.cs.cmu.edu/download/openslide-testdata/
 
 ## Cache Algo.
-https://s3fifo.com/
-https://cachemon.github.io/SIEVE-website/
+- https://s3fifo.com/
+- https://cachemon.github.io/SIEVE-website/
 
 ## S3
-https://github.com/gaul/s3proxy
-https://hub.docker.com/r/andrewgaul/s3proxy/
+- https://github.com/gaul/s3proxy
+- https://hub.docker.com/r/andrewgaul/s3proxy/
 
 ## QuPath
-https://qupath.readthedocs.io/en/stable/docs/tutorials/index.html
+- https://qupath.readthedocs.io/en/stable/docs/tutorials/index.html
 
 ## Cytomine
-https://cytomine.com/
+- https://cytomine.com/
 
 ## Wasabi
-https://wasabi.com/fr/cloud-object-storage
+- https://wasabi.com/fr/cloud-object-storage
